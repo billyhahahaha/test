@@ -2,11 +2,13 @@
 	import Wardrobe from './lib/Wardrobe.svelte';
 	import Builder from './lib/Builder.svelte';
 	import Outfits from './lib/Outfits.svelte';
+	import FitVisualizer from './lib/FitVisualizer.svelte';
 
 	const tabs = [
 		{ id: 'wardrobe', label: '👕 Wardrobe' },
 		{ id: 'builder', label: '✨ Build' },
-		{ id: 'outfits', label: '📁 Outfits' }
+		{ id: 'outfits', label: '📁 Outfits' },
+		{ id: 'fit', label: '📐 Fit' }
 	];
 	let active = 'wardrobe';
 </script>
@@ -29,8 +31,10 @@
 			<Wardrobe />
 		{:else if active === 'builder'}
 			<Builder />
-		{:else}
+		{:else if active === 'outfits'}
 			<Outfits />
+		{:else}
+			<FitVisualizer />
 		{/if}
 	</main>
 
