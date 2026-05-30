@@ -1,5 +1,8 @@
 <script>
-	import { onMount } from 'svelte';
+	import Viewer3D from './Viewer3D.svelte';
+
+	// ----- view mode -----
+	let view = '3d'; // '3d' | 'diagram'
 
 	// ----- units -----
 	let unit = 'in'; // 'in' | 'cm'
@@ -252,6 +255,24 @@
 	</div>
 
 	<div class="stage">
+		<div class="view-toggle">
+			<button class:active={view === '3d'} on:click={() => (view = '3d')}>🧍 3D</button>
+			<button class:active={view === 'diagram'} on:click={() => (view = 'diagram')}>📐 Diagram</button>
+		</div>
+
+		{#if view === '3d'}
+			<Viewer3D
+				heightCm={body.heightIn * 2.54}
+				waistCm={toCm(g.waist)}
+				hipCm={toCm(g.hip)}
+				riseCm={toCm(g.rise)}
+				inseamCm={toCm(g.inseam)}
+				thighCm={toCm(g.thigh)}
+				legOpeningCm={toCm(g.legOpening)}
+				{footLenCm}
+				color={garmentColor}
+			/>
+		{:else}
 		<svg viewBox="0 0 {W} {H}" width="100%" height="100%">
 			<defs>
 				<marker id="arrow" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
@@ -341,6 +362,7 @@
 				{/if}
 			{/each}
 		</svg>
+		{/if}
 	</div>
 </section>
 
@@ -437,6 +459,30 @@
 		border-radius: 18px;
 		padding: 8px;
 		min-height: 660px;
+	}
+	.view-toggle {
+		display: flex;
+		gap: 4px;
+		background: #fff;
+		border: 1px solid #e5e7eb;
+		border-radius: 10px;
+		padding: 4px;
+		width: fit-content;
+		margin: 4px auto 10px;
+	}
+	.view-toggle button {
+		margin: 0;
+		border: none;
+		background: transparent;
+		padding: 0.4em 1em;
+		border-radius: 7px;
+		cursor: pointer;
+		color: #4b5563;
+		font-weight: 500;
+	}
+	.view-toggle button.active {
+		background: #111827;
+		color: #fff;
 	}
 	.bodyfig :global(*) {
 		fill: #cbd5e1;
