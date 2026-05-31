@@ -145,8 +145,10 @@
 			return;
 		}
 		loading = true;
-		const sep = url.includes('?') ? '&' : '?';
-		const full = `${url}${sep}meshLod=1&textureSizeLimit=1024&useDracoMeshCompression=false`;
+		const isRPM = /readyplayer\.me/.test(url);
+		const full = isRPM
+			? `${url}${url.includes('?') ? '&' : '?'}meshLod=1&textureSizeLimit=1024&useDracoMeshCompression=false`
+			: url;
 		makeLoader().load(
 			full,
 			(gltf) => {

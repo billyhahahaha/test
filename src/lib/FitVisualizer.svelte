@@ -1,9 +1,68 @@
 <script>
+	import { onMount } from 'svelte';
 	import Viewer3D from './Viewer3D.svelte';
 	import AvatarCreator from './AvatarCreator.svelte';
 	import { avatarUrl } from './storage.js';
+	import { idbPut, idbGet, idbDel } from './idb.js';
 
 	let showCreator = false;
+
+	// bundled realistic avatars (your uploaded Avaturn meshes)
+	const AVATARS = [
+		{ id: 1, url: '/models/avatar-1.glb' },
+		{ id: 2, url: '/models/avatar-2.glb' },
+		{ id: 3, url: '/models/avatar-3.glb' },
+		{ id: 4, url: '/models/avatar-4.glb' },
+		{ id: 5, url: '/models/avatar-5.glb' }
+	];
+
+	// default to the first realistic avatar on first run
+	onMount(() => {
+		if (!$avatarUrl) avatarUrl.set(AVATARS[0].url);
+	});
+
+	// resolve the stored avatar reference into a loadable URL.
+	// 'idb:<key>#<nonce>' references an uploaded blob in IndexedDB.
+	let resolvedUrl = '';
+	let objectUrl = null;
+	let lastResolved = '__init__';
+	async function resolve(u) {
+		if (u === lastResolved) return;
+		lastResolved = u;
+		if (objectUrl) {
+			URL.revokeObjectURL(objectUrl);
+			objectUrl = null;
+		}
+		if (!u) {
+			resolvedUrl = '';
+		} else if (u.startsWith('idb:')) {
+			const key = u.slice(4).split('#')[0];
+			const blob = await idbGet(key);
+			resolvedUrl = blob ? (objectUrl = URL.createObjectURL(blob)) : '';
+		} else {
+			resolvedUrl = u;
+		}
+	}
+	$: resolve($avatarUrl);
+
+	let uploadBusy = false;
+	let importUrl = '';
+	async function onUpload(e) {
+		const file = e.target.files && e.target.files[0];
+		if (!file) return;
+		uploadBusy = true;
+		await idbPut('uploadedModel', file);
+		avatarUrl.set('idb:uploadedModel#' + Date.now());
+		uploadBusy = false;
+		e.target.value = '';
+	}
+	function loadFromUrl() {
+		if (importUrl.trim()) avatarUrl.set(importUrl.trim());
+	}
+	function removeAvatar() {
+		idbDel('uploadedModel');
+		avatarUrl.set('');
+	}
 
 	// ----- view mode -----
 	let view = '3d'; // '3d' | 'diagram'
@@ -230,16 +289,32 @@
 		</div>
 
 		<h3>Your avatar</h3>
-		<button class="avatar-btn" on:click={() => (showCreator = true)}>
-			{$avatarUrl ? '🔄 Update avatar (selfie)' : '📸 Create avatar from selfie'}
-		</button>
+		<div class="avatar-grid">
+			{#each AVATARS as a}
+				<button
+					class="avatar-chip"
+					class:active={$avatarUrl === a.url}
+					on:click={() => avatarUrl.set(a.url)}>Avatar {a.id}</button
+				>
+			{/each}
+		</div>
+
+		<div class="import-row">
+			<label class="upload">
+				{uploadBusy ? 'Loading…' : '⬆️ Upload .glb/.gltf'}
+				<input type="file" accept=".glb,.gltf,model/gltf-binary" on:change={onUpload} />
+			</label>
+			<button class="ghost" on:click={() => (showCreator = true)}>📸 Selfie (RPM)</button>
+		</div>
+		<div class="url-row">
+			<input type="text" placeholder="…or paste a model URL" bind:value={importUrl} />
+			<button class="ghost" on:click={loadFromUrl}>Load</button>
+		</div>
 		{#if $avatarUrl}
 			<p class="avatar-status">
 				✓ Avatar loaded ·
-				<button class="link" on:click={() => avatarUrl.set('')}>remove</button>
+				<button class="link" on:click={removeAvatar}>remove (show mannequin)</button>
 			</p>
-		{:else}
-			<p class="avatar-status muted">No avatar yet — a mannequin is shown until you create one.</p>
 		{/if}
 
 		<h3>Your body</h3>
@@ -288,7 +363,7 @@
 				legOpeningCm={toCm(g.legOpening)}
 				{footLenCm}
 				color={garmentColor}
-				avatarUrl={$avatarUrl}
+				avatarUrl={resolvedUrl}
 			/>
 		{:else}
 		<svg viewBox="0 0 {W} {H}" width="100%" height="100%">
@@ -469,27 +544,81 @@
 		color: #111827;
 		font-weight: 600;
 	}
-	.avatar-btn {
-		width: 100%;
+	.avatar-grid {
+		display: grid;
+		grid-template-columns: repeat(5, 1fr);
+		gap: 6px;
+	}
+	.avatar-chip {
 		margin: 0;
-		border: none;
-		background: #111827;
-		color: #fff;
-		padding: 0.6em;
+		border: 1px solid #e5e7eb;
+		background: #fff;
+		padding: 0.5em 0;
 		border-radius: 8px;
 		cursor: pointer;
+		font-size: 0.72rem;
 		font-weight: 600;
+		color: #374151;
 	}
-	.avatar-btn:hover {
-		background: #374151;
+	.avatar-chip.active {
+		background: #111827;
+		color: #fff;
+		border-color: #111827;
+	}
+	.import-row {
+		display: flex;
+		gap: 6px;
+		margin-top: 8px;
+	}
+	.upload {
+		position: relative;
+		flex: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border: 1px dashed #cbd5e1;
+		border-radius: 8px;
+		padding: 0.5em;
+		font-size: 0.74rem;
+		color: #4b5563;
+		cursor: pointer;
+		text-align: center;
+	}
+	.upload input {
+		position: absolute;
+		inset: 0;
+		opacity: 0;
+		cursor: pointer;
+		margin: 0;
+	}
+	.ghost {
+		margin: 0;
+		border: 1px solid #e5e7eb;
+		background: #fff;
+		border-radius: 8px;
+		padding: 0.5em 0.7em;
+		cursor: pointer;
+		font-size: 0.74rem;
+		color: #374151;
+		white-space: nowrap;
+	}
+	.ghost:hover {
+		border-color: #9ca3af;
+	}
+	.url-row {
+		display: flex;
+		gap: 6px;
+		margin-top: 6px;
+	}
+	.url-row input {
+		flex: 1;
+		margin: 0;
+		font-size: 0.78rem;
 	}
 	.avatar-status {
 		margin: 8px 0 0;
 		font-size: 0.78rem;
 		color: #16a34a;
-	}
-	.avatar-status.muted {
-		color: #9ca3af;
 	}
 	.link {
 		border: none;
