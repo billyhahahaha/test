@@ -4,6 +4,7 @@
 	import AvatarCreator from './AvatarCreator.svelte';
 	import { avatarUrl } from './storage.js';
 	import { idbPut, idbGet, idbDel } from './idb.js';
+	import { parseMeasurements } from './parseMeasurements.js';
 
 	let showCreator = false;
 
@@ -62,6 +63,58 @@
 	function removeAvatar() {
 		idbDel('uploadedModel');
 		avatarUrl.set('');
+	}
+
+	// ----- import garment measurements from a link / pasted text -----
+	let linkUrl = '';
+	let sizeText = '';
+	let linkBusy = false;
+	let importMsg = '';
+
+	const round1 = (v) => Math.round(v * 10) / 10;
+
+	// fieldsCm: { waist, hip, rise, inseam, thigh, legOpening } in centimetres
+	function applyFields(fieldsCm) {
+		const map = { waist: 'waist', hip: 'hip', rise: 'rise', inseam: 'inseam', thigh: 'thigh', legOpening: 'legOpening' };
+		const applied = [];
+		for (const k in map) {
+			if (fieldsCm[k] != null) {
+				g[map[k]] = round1(unit === 'in' ? fieldsCm[k] / 2.54 : fieldsCm[k]);
+				applied.push(k);
+			}
+		}
+		g = g; // trigger reactivity -> updates the 3D model
+		return applied;
+	}
+
+	async function fetchLink() {
+		if (!linkUrl.trim()) return;
+		linkBusy = true;
+		importMsg = 'Fetching the page…';
+		try {
+			const r = await fetch('/api/scrape?url=' + encodeURIComponent(linkUrl.trim()));
+			const j = await r.json();
+			if (j.ok) {
+				const applied = applyFields(j.found || {});
+				importMsg = applied.length
+					? `Applied ${applied.join(', ')}${j.title ? ` from “${j.title.slice(0, 60)}”` : ''}.`
+					: 'Reached the page but found no recognizable measurements. Use the paste box below.';
+			} else {
+				importMsg = j.error || 'Could not read that page.';
+			}
+		} catch (e) {
+			importMsg = 'Request failed: ' + (e.message || 'network error');
+		}
+		linkBusy = false;
+	}
+
+	function parseText() {
+		if (!sizeText.trim()) return;
+		const { fields } = parseMeasurements(sizeText);
+		const applied = applyFields(fields);
+		importMsg = applied.length
+			? `Applied ${applied.join(', ')} from pasted text.`
+			: 'No measurements recognized in the pasted text.';
 	}
 
 	// ----- view mode -----
@@ -327,6 +380,25 @@
 		<p class="readout">{heightFtIn} · {body.weightLb} lb · foot ≈ {label(footLenCm)}</p>
 
 		<h3>Trousers</h3>
+		<div class="import-meas">
+			<input type="text" placeholder="Paste a product link" bind:value={linkUrl} />
+			<button class="ghost" on:click={fetchLink} disabled={linkBusy}>
+				{linkBusy ? '…' : 'Fetch'}
+			</button>
+		</div>
+		<details class="paste">
+			<summary>or paste the size-guide text</summary>
+			<textarea
+				rows="3"
+				placeholder="e.g. Waist 33 in · Hip 41 in · Rise 11 in · Inseam 34 in · Thigh 24 in · Leg opening 15 in"
+				bind:value={sizeText}
+			></textarea>
+			<button class="ghost" on:click={parseText}>Parse text</button>
+		</details>
+		{#if importMsg}
+			<p class="import-msg">{importMsg}</p>
+		{/if}
+
 		<div class="grid2">
 			<label>Waist<input type="number" bind:value={g.waist} /></label>
 			<label>Hip<input type="number" bind:value={g.hip} /></label>
@@ -614,6 +686,41 @@
 		flex: 1;
 		margin: 0;
 		font-size: 0.78rem;
+	}
+	.import-meas {
+		display: flex;
+		gap: 6px;
+		margin-bottom: 6px;
+	}
+	.import-meas input {
+		flex: 1;
+		margin: 0;
+		font-size: 0.78rem;
+	}
+	.paste {
+		font-size: 0.78rem;
+		color: #6b7280;
+		margin-bottom: 6px;
+	}
+	.paste summary {
+		cursor: pointer;
+		padding: 2px 0;
+	}
+	.paste textarea {
+		width: 100%;
+		margin: 6px 0;
+		font-size: 0.78rem;
+		font-family: inherit;
+		border: 1px solid #ccc;
+		border-radius: 6px;
+		padding: 6px;
+		box-sizing: border-box;
+	}
+	.import-msg {
+		margin: 0 0 8px;
+		font-size: 0.76rem;
+		color: #2563eb;
+		line-height: 1.35;
 	}
 	.avatar-status {
 		margin: 8px 0 0;
