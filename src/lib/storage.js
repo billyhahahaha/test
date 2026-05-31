@@ -45,6 +45,28 @@ function persisted(key) {
 export const items = persisted(ITEMS_KEY);
 export const outfits = persisted(OUTFITS_KEY);
 
+// A persisted scalar (e.g. the saved Ready Player Me avatar URL).
+function persistedScalar(key, fallback) {
+	let initial = fallback;
+	try {
+		const raw = localStorage.getItem(key);
+		if (raw != null) initial = JSON.parse(raw);
+	} catch (e) {
+		console.error('Failed to load', key, e);
+	}
+	const store = writable(initial);
+	store.subscribe((value) => {
+		try {
+			localStorage.setItem(key, JSON.stringify(value));
+		} catch (e) {
+			console.error('Failed to save', key, e);
+		}
+	});
+	return store;
+}
+
+export const avatarUrl = persistedScalar('wardrobe.avatarUrl', '');
+
 export function uid() {
 	return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }

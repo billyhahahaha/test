@@ -1,5 +1,9 @@
 <script>
 	import Viewer3D from './Viewer3D.svelte';
+	import AvatarCreator from './AvatarCreator.svelte';
+	import { avatarUrl } from './storage.js';
+
+	let showCreator = false;
 
 	// ----- view mode -----
 	let view = '3d'; // '3d' | 'diagram'
@@ -225,6 +229,19 @@
 			</div>
 		</div>
 
+		<h3>Your avatar</h3>
+		<button class="avatar-btn" on:click={() => (showCreator = true)}>
+			{$avatarUrl ? '🔄 Update avatar (selfie)' : '📸 Create avatar from selfie'}
+		</button>
+		{#if $avatarUrl}
+			<p class="avatar-status">
+				✓ Avatar loaded ·
+				<button class="link" on:click={() => avatarUrl.set('')}>remove</button>
+			</p>
+		{:else}
+			<p class="avatar-status muted">No avatar yet — a mannequin is shown until you create one.</p>
+		{/if}
+
 		<h3>Your body</h3>
 		<div class="grid2">
 			<label>Height (in)<input type="number" bind:value={body.heightIn} /></label>
@@ -271,6 +288,7 @@
 				legOpeningCm={toCm(g.legOpening)}
 				{footLenCm}
 				color={garmentColor}
+				avatarUrl={$avatarUrl}
 			/>
 		{:else}
 		<svg viewBox="0 0 {W} {H}" width="100%" height="100%">
@@ -366,6 +384,10 @@
 	</div>
 </section>
 
+{#if showCreator}
+	<AvatarCreator on:close={() => (showCreator = false)} />
+{/if}
+
 <style>
 	.fit {
 		display: grid;
@@ -446,6 +468,38 @@
 		font-size: 0.85rem;
 		color: #111827;
 		font-weight: 600;
+	}
+	.avatar-btn {
+		width: 100%;
+		margin: 0;
+		border: none;
+		background: #111827;
+		color: #fff;
+		padding: 0.6em;
+		border-radius: 8px;
+		cursor: pointer;
+		font-weight: 600;
+	}
+	.avatar-btn:hover {
+		background: #374151;
+	}
+	.avatar-status {
+		margin: 8px 0 0;
+		font-size: 0.78rem;
+		color: #16a34a;
+	}
+	.avatar-status.muted {
+		color: #9ca3af;
+	}
+	.link {
+		border: none;
+		background: none;
+		padding: 0;
+		margin: 0;
+		color: #2563eb;
+		cursor: pointer;
+		text-decoration: underline;
+		font-size: inherit;
 	}
 	.note {
 		margin-top: 16px;
