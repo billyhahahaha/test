@@ -3,14 +3,16 @@
 	import Builder from './lib/Builder.svelte';
 	import Outfits from './lib/Outfits.svelte';
 	import FitVisualizer from './lib/FitVisualizer.svelte';
+	import Collection from './lib/Collection.svelte';
+	import { activeTab } from './lib/storage.js';
 
 	const tabs = [
 		{ id: 'wardrobe', label: '👕 Wardrobe' },
 		{ id: 'builder', label: '✨ Build' },
 		{ id: 'outfits', label: '📁 Outfits' },
+		{ id: 'collection', label: '🧥 Collection' },
 		{ id: 'fit', label: '📐 Fit' }
 	];
-	let active = 'wardrobe';
 </script>
 
 <div class="app">
@@ -18,29 +20,28 @@
 		<h1>Outfit Studio</h1>
 		<nav>
 			{#each tabs as tab}
-				<button
-					class:active={active === tab.id}
-					on:click={() => (active = tab.id)}>{tab.label}</button
+				<button class:active={$activeTab === tab.id} on:click={() => activeTab.set(tab.id)}
+					>{tab.label}</button
 				>
 			{/each}
 		</nav>
 	</header>
 
 	<main>
-		{#if active === 'wardrobe'}
+		{#if $activeTab === 'wardrobe'}
 			<Wardrobe />
-		{:else if active === 'builder'}
+		{:else if $activeTab === 'builder'}
 			<Builder />
-		{:else if active === 'outfits'}
+		{:else if $activeTab === 'outfits'}
 			<Outfits />
+		{:else if $activeTab === 'collection'}
+			<Collection />
 		{:else}
 			<FitVisualizer />
 		{/if}
 	</main>
 
-	<footer>
-		Everything is saved privately in your browser.
-	</footer>
+	<footer>Everything is saved privately in your browser.</footer>
 </div>
 
 <style>
@@ -67,6 +68,7 @@
 
 	nav {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 6px;
 		background: #f3f4f6;
 		padding: 4px;

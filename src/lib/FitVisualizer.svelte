@@ -2,9 +2,14 @@
 	import { onMount } from 'svelte';
 	import Viewer3D from './Viewer3D.svelte';
 	import AvatarCreator from './AvatarCreator.svelte';
-	import { avatarUrl } from './storage.js';
+	import { avatarUrl, tryOn } from './storage.js';
 	import { idbPut, idbGet, idbDel } from './idb.js';
 	import { parseMeasurements } from './parseMeasurements.js';
+
+	// 3D options
+	let hideClothes = true;
+	let showLabels = false;
+	let autoRotate = false;
 
 	let showCreator = false;
 
@@ -329,6 +334,32 @@
 	})();
 
 	let garmentColor = '#2f3a4a';
+
+	// apply a garment chosen from the Collection tab
+	$: if ($tryOn) {
+		applyFields($tryOn);
+		tryOn.set(null);
+	}
+
+	// fit ease at the waistband (garment waist − body waist)
+	$: waistEaseCm = toCm(g.waist) - toCm(body.waist);
+	$: waistEase = (() => {
+		const e = waistEaseCm;
+		const val = unit === 'in' ? e / 2.54 : e;
+		let cls = 'ok',
+			word = 'Comfortable';
+		if (e < 0) {
+			cls = 'bad';
+			word = 'Too tight';
+		} else if (e < 1) {
+			cls = 'warn';
+			word = 'Snug';
+		} else if (e > 7) {
+			cls = 'warn';
+			word = 'Relaxed';
+		}
+		return { text: `${val >= 0 ? '+' : ''}${Math.round(val * 10) / 10}${unit === 'in' ? '"' : 'cm'}`, word, cls };
+	})();
 </script>
 
 <section class="fit">
@@ -339,6 +370,28 @@
 				<button class:active={unit === 'in'} on:click={() => (unit = 'in')}>in</button>
 				<button class:active={unit === 'cm'} on:click={() => (unit = 'cm')}>cm</button>
 			</div>
+		</div>
+
+		<div class="import-box">
+			<div class="import-label">🔗 Import garment from a link</div>
+			<div class="import-meas">
+				<input type="text" placeholder="Paste a product URL" bind:value={linkUrl} />
+				<button class="primary-sm" on:click={fetchLink} disabled={linkBusy}>
+					{linkBusy ? '…' : 'Fetch'}
+				</button>
+			</div>
+			<details class="paste">
+				<summary>or paste the size-guide text</summary>
+				<textarea
+					rows="3"
+					placeholder="e.g. Waist 33 in · Hip 41 in · Rise 11 in · Inseam 34 in · Thigh 24 in · Leg opening 15 in"
+					bind:value={sizeText}
+				></textarea>
+				<button class="ghost" on:click={parseText}>Parse text</button>
+			</details>
+			{#if importMsg}
+				<p class="import-msg">{importMsg}</p>
+			{/if}
 		</div>
 
 		<h3>Your avatar</h3>
@@ -380,25 +433,6 @@
 		<p class="readout">{heightFtIn} · {body.weightLb} lb · foot ≈ {label(footLenCm)}</p>
 
 		<h3>Trousers</h3>
-		<div class="import-meas">
-			<input type="text" placeholder="Paste a product link" bind:value={linkUrl} />
-			<button class="ghost" on:click={fetchLink} disabled={linkBusy}>
-				{linkBusy ? '…' : 'Fetch'}
-			</button>
-		</div>
-		<details class="paste">
-			<summary>or paste the size-guide text</summary>
-			<textarea
-				rows="3"
-				placeholder="e.g. Waist 33 in · Hip 41 in · Rise 11 in · Inseam 34 in · Thigh 24 in · Leg opening 15 in"
-				bind:value={sizeText}
-			></textarea>
-			<button class="ghost" on:click={parseText}>Parse text</button>
-		</details>
-		{#if importMsg}
-			<p class="import-msg">{importMsg}</p>
-		{/if}
-
 		<div class="grid2">
 			<label>Waist<input type="number" bind:value={g.waist} /></label>
 			<label>Hip<input type="number" bind:value={g.hip} /></label>
@@ -406,6 +440,10 @@
 			<label>Inseam<input type="number" bind:value={g.inseam} /></label>
 			<label>Thigh<input type="number" bind:value={g.thigh} /></label>
 			<label>Leg opening<input type="number" bind:value={g.legOpening} /></label>
+		</div>
+
+		<div class="ease ease-{waistEase.cls}">
+			Waist fit vs your body: <strong>{waistEase.word}</strong> ({waistEase.text} ease)
 		</div>
 
 		<label class="color">Garment color
@@ -425,6 +463,11 @@
 		</div>
 
 		{#if view === '3d'}
+			<div class="opts">
+				<label><input type="checkbox" bind:checked={hideClothes} /> Hide avatar’s clothes</label>
+				<label><input type="checkbox" bind:checked={showLabels} /> Labels</label>
+				<label><input type="checkbox" bind:checked={autoRotate} /> Spin</label>
+			</div>
 			<Viewer3D
 				heightCm={body.heightIn * 2.54}
 				waistCm={toCm(g.waist)}
@@ -436,6 +479,10 @@
 				{footLenCm}
 				color={garmentColor}
 				avatarUrl={resolvedUrl}
+				{unit}
+				hideAvatarClothes={hideClothes}
+				{showLabels}
+				{autoRotate}
 			/>
 		{:else}
 		<svg viewBox="0 0 {W} {H}" width="100%" height="100%">
@@ -686,6 +733,68 @@
 		flex: 1;
 		margin: 0;
 		font-size: 0.78rem;
+	}
+	.import-box {
+		background: #f8fafc;
+		border: 1px solid #e5e7eb;
+		border-radius: 10px;
+		padding: 12px;
+		margin-bottom: 14px;
+	}
+	.import-label {
+		display: block;
+		font-size: 0.82rem;
+		font-weight: 600;
+		color: #111827;
+		margin-bottom: 8px;
+	}
+	.primary-sm {
+		margin: 0;
+		border: none;
+		background: #111827;
+		color: #fff;
+		border-radius: 8px;
+		padding: 0 1em;
+		cursor: pointer;
+		font-weight: 600;
+	}
+	.primary-sm:disabled {
+		background: #9ca3af;
+	}
+	.ease {
+		font-size: 0.8rem;
+		border-radius: 8px;
+		padding: 8px 10px;
+		margin: 10px 0 4px;
+	}
+	.ease-ok {
+		background: #ecfdf5;
+		color: #047857;
+	}
+	.ease-warn {
+		background: #fffbeb;
+		color: #b45309;
+	}
+	.ease-bad {
+		background: #fef2f2;
+		color: #b91c1c;
+	}
+	.opts {
+		display: flex;
+		gap: 14px;
+		justify-content: center;
+		margin: 0 auto 8px;
+		font-size: 0.78rem;
+		color: #4b5563;
+	}
+	.opts label {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		cursor: pointer;
+	}
+	.opts input {
+		margin: 0;
 	}
 	.import-meas {
 		display: flex;

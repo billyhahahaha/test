@@ -67,6 +67,25 @@ function persistedScalar(key, fallback) {
 
 export const avatarUrl = persistedScalar('wardrobe.avatarUrl', '');
 
+// Garment collection (each: { id, name, image, type, measurements:{...cm}, sourceUrl })
+export const garments = persisted('wardrobe.garments');
+
+export function addGarment(g) {
+	const item = { id: uid(), type: 'trousers', measurements: {}, ...g };
+	garments.update((list) => [item, ...list]);
+	return item;
+}
+export function removeGarment(id) {
+	garments.update((list) => list.filter((g) => g.id !== id));
+}
+export function updateGarment(id, patch) {
+	garments.update((list) => list.map((g) => (g.id === id ? { ...g, ...patch } : g)));
+}
+
+// Cross-tab signals
+export const tryOn = writable(null); // measurements (cm) to load into the Fit tab
+export const activeTab = persistedScalar('wardrobe.activeTab', 'wardrobe');
+
 export function uid() {
 	return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
