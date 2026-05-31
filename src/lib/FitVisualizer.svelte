@@ -333,7 +333,7 @@
 		return out;
 	})();
 
-	let garmentColor = '#2f3a4a';
+	let garmentColor = '#23262b';
 
 	// apply a garment chosen from the Collection tab
 	$: if ($tryOn) {

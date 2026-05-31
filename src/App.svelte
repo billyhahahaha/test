@@ -4,7 +4,30 @@
 	import Outfits from './lib/Outfits.svelte';
 	import FitVisualizer from './lib/FitVisualizer.svelte';
 	import Collection from './lib/Collection.svelte';
-	import { activeTab } from './lib/storage.js';
+	import { onMount } from 'svelte';
+	import { activeTab, addGarment, tryOn } from './lib/storage.js';
+
+	// Handle hand-off from the bookmarklet: ?import=<base64url(JSON)>
+	onMount(() => {
+		try {
+			const params = new URLSearchParams(location.search);
+			const raw = params.get('import');
+			if (!raw) return;
+			const json = decodeURIComponent(escape(atob(raw.replace(/-/g, '+').replace(/_/g, '/'))));
+			const data = JSON.parse(json);
+			addGarment({
+				name: data.name || 'Imported garment',
+				image: data.image || '',
+				sourceUrl: data.url || '',
+				measurements: data.measurements || {}
+			});
+			if (data.measurements && Object.keys(data.measurements).length) tryOn.set(data.measurements);
+			activeTab.set('fit');
+			history.replaceState(null, '', location.pathname);
+		} catch (e) {
+			console.warn('import failed', e);
+		}
+	});
 
 	const tabs = [
 		{ id: 'wardrobe', label: '👕 Wardrobe' },

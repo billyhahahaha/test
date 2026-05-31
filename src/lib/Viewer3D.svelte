@@ -85,40 +85,70 @@
 		labelGroup = new THREE.Group();
 		const H = M(heightCm);
 		const waistY = 0.6 * H;
+		const hipY = 0.53 * H;
 		const crotchY = waistY - M(riseCm);
 		const hemY = crotchY - M(inseamCm);
-		const waistR = rad(waistCm) * 1.06;
-		const hipR = rad(hipCm) * 1.06;
-		const thighR = rad(thighCm) * 1.06;
-		const hemR = rad(legOpeningCm) * 1.06;
-		const mat = new THREE.MeshStandardMaterial({
-			color: new THREE.Color(color),
-			roughness: 0.82,
-			metalness: 0.0
+		const kneeY = crotchY - (crotchY - hemY) * 0.55;
+		const ease = 1.06;
+		const waistR = rad(waistCm) * ease;
+		const hipR = rad(hipCm) * ease;
+		const thighR = rad(thighCm) * ease;
+		const hemR = rad(legOpeningCm) * ease;
+		const kneeR = thighR * 0.62 + hemR * 0.38; // tapered through the knee
+		const base = new THREE.Color(color);
+		const mat = new THREE.MeshPhysicalMaterial({
+			color: base,
+			roughness: 0.6,
+			metalness: 0.0,
+			sheen: 0.6,
+			sheenRoughness: 0.55,
+			sheenColor: base.clone().lerp(new THREE.Color(0xffffff), 0.35),
+			clearcoat: 0.04
 		});
-		const add = (geo, x, y) => {
+		const add = (geo, x, y, z = 0) => {
 			const m = new THREE.Mesh(geo, mat);
-			m.position.set(x, y, 0);
+			m.position.set(x, y, z);
 			m.castShadow = true;
 			m.receiveShadow = true;
 			garmentGroup.add(m);
 		};
-		// pelvis
-		add(new THREE.CylinderGeometry(waistR, hipR, waistY - crotchY, 40, 1, true), 0, (waistY + crotchY) / 2);
+		// pelvis: waist -> hip -> crotch
+		add(new THREE.CylinderGeometry(waistR, hipR, waistY - hipY, 48, 1, true), 0, (waistY + hipY) / 2);
+		add(new THREE.CylinderGeometry(hipR, hipR * 1.02, hipY - crotchY, 48, 1, true), 0, (hipY + crotchY) / 2);
 		// waistband (solid ring)
-		add(new THREE.CylinderGeometry(waistR * 1.05, waistR * 1.05, Math.min(0.045, (waistY - crotchY) * 0.3), 40), 0, waistY - 0.02);
-		// legs
-		const legX = hipR * 0.52;
+		const wbH = Math.min(0.05, (waistY - crotchY) * 0.32);
+		add(new THREE.CylinderGeometry(waistR * 1.04, waistR * 1.04, wbH, 48), 0, waistY - wbH / 2);
+		// six belt loops
+		const loopGeo = new THREE.BoxGeometry(0.012, wbH * 1.5, 0.016);
+		for (const deg of [22, -22, 78, -78, 150, -150]) {
+			const a = (deg * Math.PI) / 180;
+			const m = new THREE.Mesh(loopGeo, mat);
+			m.position.set(Math.sin(a) * waistR * 1.05, waistY - wbH / 2, Math.cos(a) * waistR * 1.05);
+			m.rotation.y = a;
+			m.castShadow = true;
+			garmentGroup.add(m);
+		}
+		// legs: thigh -> knee -> hem (tapered), with a small ankle break + crease
+		const legX = hipR * 0.5;
 		for (const sx of [-1, 1]) {
-			add(new THREE.CylinderGeometry(thighR, hemR, crotchY - hemY, 32, 1, true), sx * legX, (crotchY + hemY) / 2);
-			add(new THREE.CylinderGeometry(hemR, hemR * 0.99, 0.02, 32), sx * legX, hemY);
+			add(new THREE.CylinderGeometry(thighR, kneeR, crotchY - kneeY, 36, 1, true), sx * legX, (crotchY + kneeY) / 2);
+			add(new THREE.CylinderGeometry(kneeR, hemR, kneeY - hemY, 36, 1, true), sx * legX, (kneeY + hemY) / 2);
+			add(new THREE.CylinderGeometry(hemR, hemR, 0.02, 36), sx * legX, hemY);
+			// front leg crease (subtle raised seam)
+			const crease = new THREE.Mesh(
+				new THREE.BoxGeometry(0.006, crotchY - hemY, 0.004),
+				mat
+			);
+			crease.position.set(sx * legX, (crotchY + hemY) / 2, (thighR + hemR) / 2);
+			crease.castShadow = true;
+			garmentGroup.add(crease);
 		}
 		scene.add(garmentGroup);
 
 		// dimension labels
 		const L = [
 			{ t: `Waist ${fmtLen(waistCm)}`, p: [waistR + 0.12, waistY, 0] },
-			{ t: `Hip ${fmtLen(hipCm)}`, p: [hipR + 0.12, (waistY + crotchY) / 2, 0] },
+			{ t: `Hip ${fmtLen(hipCm)}`, p: [hipR + 0.12, hipY, 0] },
 			{ t: `Rise ${fmtLen(riseCm)}`, p: [0.02, (waistY + crotchY) / 2, hipR + 0.1] },
 			{ t: `Thigh ${fmtLen(thighCm)}`, p: [legX + thighR + 0.1, crotchY - 0.05, 0] },
 			{ t: `Inseam ${fmtLen(inseamCm)}`, p: [0.02, (crotchY + hemY) / 2, hemR + 0.12] },
