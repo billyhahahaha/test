@@ -6,6 +6,7 @@
 	import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 	import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 	import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+	import { buildClothTrousers } from './ClothGarment.js';
 
 	// measurements in cm
 	export let heightCm = 190.5;
@@ -22,10 +23,14 @@
 	export let hideAvatarClothes = true;
 	export let showLabels = false;
 	export let autoRotate = false;
+	export let mode = 'cloth'; // 'cloth' | 'parametric'
+	export let fabric = 'gabardine';
 
 	let container;
 	let renderer, scene, camera, controls, frame, pmrem;
 	let bodyGroup, garmentGroup, avatarGroup, labelGroup, shadowPlane;
+	let cloth = null;
+	let clothSettling = 0;
 	let clothingMeshes = [];
 	let ready = false;
 	let loading = false;
@@ -78,8 +83,41 @@
 	}
 
 	// ---------- garment ----------
+	function disposeCloth() {
+		if (cloth) {
+			scene.remove(cloth.mesh);
+			cloth.dispose();
+			cloth = null;
+		}
+	}
+
+	function buildCloth() {
+		disposeCloth();
+		clearGroup('labelGroup');
+		labelGroup = new THREE.Group();
+		clothSettling = 60; // keep solving for a bit so the drape relaxes on screen
+		cloth = buildClothTrousers({
+			heightCm,
+			waistCm,
+			hipCm,
+			riseCm,
+			inseamCm,
+			thighCm,
+			legOpeningCm,
+			color,
+			fabric
+		});
+		scene.add(cloth.mesh);
+		buildLabels();
+	}
+
 	function buildGarment() {
 		clearGroup('garmentGroup');
+		if (mode === 'cloth') {
+			buildCloth();
+			return;
+		}
+		disposeCloth();
 		clearGroup('labelGroup');
 		garmentGroup = new THREE.Group();
 		labelGroup = new THREE.Group();
@@ -144,8 +182,24 @@
 			garmentGroup.add(crease);
 		}
 		scene.add(garmentGroup);
+		buildLabels();
+	}
 
-		// dimension labels
+	function buildLabels() {
+		if (!labelGroup) {
+			labelGroup = new THREE.Group();
+		}
+		const H = M(heightCm);
+		const waistY = 0.6 * H;
+		const hipY = 0.53 * H;
+		const crotchY = waistY - M(riseCm);
+		const hemY = crotchY - M(inseamCm);
+		const ease = mode === 'cloth' ? 1.12 : 1.06;
+		const waistR = rad(waistCm) * ease;
+		const hipR = rad(hipCm) * ease;
+		const thighR = rad(thighCm) * ease;
+		const hemR = rad(legOpeningCm) * ease;
+		const legX = hipR * 0.5;
 		const L = [
 			{ t: `Waist ${fmtLen(waistCm)}`, p: [waistR + 0.12, waistY, 0] },
 			{ t: `Hip ${fmtLen(hipCm)}`, p: [hipR + 0.12, hipY, 0] },
@@ -363,6 +417,10 @@
 
 		const loop = () => {
 			frame = requestAnimationFrame(loop);
+			if (cloth && clothSettling > 0) {
+				cloth.step();
+				clothSettling--;
+			}
 			controls.update();
 			renderer.render(scene, camera);
 		};
@@ -381,6 +439,7 @@
 	onDestroy(() => {
 		cancelAnimationFrame(frame);
 		window.removeEventListener('resize', onResize);
+		disposeCloth();
 		if (pmrem) pmrem.dispose();
 		if (renderer) {
 			renderer.dispose();
@@ -392,7 +451,7 @@
 	$: if (ready) applyClothesVisibility(hideAvatarClothes);
 	$: if (labelGroup) labelGroup.visible = showLabels;
 	$: if (controls) controls.autoRotate = autoRotate;
-	$: heightCm, waistCm, hipCm, riseCm, inseamCm, thighCm, legOpeningCm, footLenCm, color, unit, update();
+	$: heightCm, waistCm, hipCm, riseCm, inseamCm, thighCm, legOpeningCm, footLenCm, color, unit, mode, fabric, update();
 </script>
 
 <div class="viewer" bind:this={container}>

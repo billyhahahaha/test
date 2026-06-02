@@ -10,6 +10,9 @@
 	let hideClothes = true;
 	let showLabels = false;
 	let autoRotate = false;
+	let garmentMode = 'cloth'; // 'cloth' | 'parametric'
+	let fabric = 'gabardine';
+	const FABRICS = ['gabardine', 'wool', 'cotton', 'denim', 'linen', 'silk'];
 
 	let showCreator = false;
 
@@ -464,6 +467,17 @@
 
 		{#if view === '3d'}
 			<div class="opts">
+				<div class="seg">
+					<button class:on={garmentMode === 'cloth'} on:click={() => (garmentMode = 'cloth')}>🧵 Cloth sim</button>
+					<button class:on={garmentMode === 'parametric'} on:click={() => (garmentMode = 'parametric')}>📐 Basic</button>
+				</div>
+				{#if garmentMode === 'cloth'}
+					<label class="fab">Fabric
+						<select bind:value={fabric}>
+							{#each FABRICS as f}<option value={f}>{f}</option>{/each}
+						</select>
+					</label>
+				{/if}
 				<label><input type="checkbox" bind:checked={hideClothes} /> Hide avatar’s clothes</label>
 				<label><input type="checkbox" bind:checked={showLabels} /> Labels</label>
 				<label><input type="checkbox" bind:checked={autoRotate} /> Spin</label>
@@ -483,6 +497,8 @@
 				hideAvatarClothes={hideClothes}
 				{showLabels}
 				{autoRotate}
+				mode={garmentMode}
+				{fabric}
 			/>
 		{:else}
 		<svg viewBox="0 0 {W} {H}" width="100%" height="100%">
@@ -792,6 +808,32 @@
 		align-items: center;
 		gap: 4px;
 		cursor: pointer;
+	}
+	.opts .seg {
+		display: inline-flex;
+		border: 1px solid #d1d5db;
+		border-radius: 7px;
+		overflow: hidden;
+	}
+	.opts .seg button {
+		margin: 0;
+		border: none;
+		background: #fff;
+		padding: 4px 9px;
+		font-size: 0.74rem;
+		color: #4b5563;
+		cursor: pointer;
+	}
+	.opts .seg button.on {
+		background: #111827;
+		color: #fff;
+	}
+	.opts .fab select {
+		margin: 0;
+		font-size: 0.74rem;
+		padding: 2px 4px;
+		border-radius: 6px;
+		border: 1px solid #d1d5db;
 	}
 	.opts input {
 		margin: 0;
