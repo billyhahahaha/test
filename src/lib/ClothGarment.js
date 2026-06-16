@@ -158,13 +158,29 @@ export function buildClothTrousers(opts) {
 
 	// stitch pelvis bottom ring to each leg top ring (front + back halves)
 	const pelvisBottom = tubes[0].rings[tubes[0].rings.length - 1];
-	const legLtop = tubes[1].rings[0];
-	const legRtop = tubes[2].rings[0];
-	for (let s = 0; s < SEG; s++) {
-		// map pelvis segment to nearest leg by x
-		const target = Math.cos((s / SEG) * Math.PI * 2) < 0 ? legLtop : legRtop;
-		addC(pelvisBottom[s], target[s], fab.stretch * 0.8);
+	const legTops = [tubes[1].rings[0], tubes[2].rings[0]];
+	// Weld each leg-top vertex to its nearest pelvis-bottom vertex with a rigid
+	// (stiffness 1) zero-ish constraint so the crotch seam can't pull apart.
+	function nearestPelvis(idx) {
+		const ix = idx * 3;
+		let best = -1, bd = Infinity;
+		for (const p of pelvisBottom) {
+			const px = p * 3;
+			const dx = P[ix] - P[px], dy = P[ix + 1] - P[px + 1], dz = P[ix + 2] - P[px + 2];
+			const d = dx * dx + dy * dy + dz * dz;
+			if (d < bd) { bd = d; best = p; }
+		}
+		return best;
 	}
+	for (const top of legTops) {
+		for (const v of top) {
+			const p = nearestPelvis(v);
+			constraints.push([v, p, 0.0, 1.0]); // pull together → closes the seam
+			// also tie to the pelvis neighbours around the ring for a smooth join
+		}
+	}
+	// keep the pelvis bottom ring from collapsing inward at the crotch
+	for (let s = 0; s < SEG; s++) addC(pelvisBottom[s], pelvisBottom[(s + 2) % SEG], fab.bend);
 
 	// ---- colliders ----
 	const legColliders = [];

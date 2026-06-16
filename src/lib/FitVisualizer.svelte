@@ -16,18 +16,23 @@
 
 	let showCreator = false;
 
-	// bundled realistic avatars (your uploaded Avaturn meshes)
+	// bundled realistic avatars (your uploaded Avaturn meshes).
+	// Avatars 2 & 4 are bare base bodies (no clothing mesh) — ideal for try-on
+	// because the trousers drape over real legs. Avatars 1/3/5 are *clothed*
+	// (the body lives inside the avaturn_look mesh), so hiding clothes removes
+	// the legs. We flag that so the UI can warn / pick the right default.
 	const AVATARS = [
-		{ id: 1, url: '/models/avatar-1.glb' },
-		{ id: 2, url: '/models/avatar-2.glb' },
-		{ id: 3, url: '/models/avatar-3.glb' },
-		{ id: 4, url: '/models/avatar-4.glb' },
-		{ id: 5, url: '/models/avatar-5.glb' }
+		{ id: 1, url: '/models/avatar-1.glb', bare: false },
+		{ id: 2, url: '/models/avatar-2.glb', bare: true },
+		{ id: 3, url: '/models/avatar-3.glb', bare: false },
+		{ id: 4, url: '/models/avatar-4.glb', bare: true },
+		{ id: 5, url: '/models/avatar-5.glb', bare: false }
 	];
+	$: currentBare = AVATARS.find((a) => a.url === $avatarUrl)?.bare ?? true;
 
-	// default to the first realistic avatar on first run
+	// default to a bare base body so try-on works out of the box
 	onMount(() => {
-		if (!$avatarUrl) avatarUrl.set(AVATARS[0].url);
+		if (!$avatarUrl) avatarUrl.set(AVATARS[1].url);
 	});
 
 	// resolve the stored avatar reference into a loadable URL.
@@ -403,10 +408,20 @@
 				<button
 					class="avatar-chip"
 					class:active={$avatarUrl === a.url}
-					on:click={() => avatarUrl.set(a.url)}>Avatar {a.id}</button
-				>
+					title={a.bare ? 'Bare body — best for try-on' : 'Already dressed — hide its clothes to try garments on'}
+					on:click={() => avatarUrl.set(a.url)}>
+					{a.id}{#if a.bare}<span class="bare-dot" title="bare body">•</span>{/if}
+				</button>
 			{/each}
 		</div>
+		<p class="avatar-hint">
+			{#if currentBare}
+				Bare body — trousers drape directly on the legs. 👍
+			{:else}
+				This avatar is already dressed; its body is part of its clothing, so hiding
+				clothes removes the legs. Pick a dotted avatar (2 or 4) for try-on.
+			{/if}
+		</p>
 
 		<div class="import-row">
 			<label class="upload">
@@ -694,6 +709,17 @@
 		font-size: 0.72rem;
 		font-weight: 600;
 		color: #374151;
+	}
+	.bare-dot {
+		color: #22c55e;
+		font-size: 1.1em;
+		line-height: 0;
+	}
+	.avatar-hint {
+		font-size: 0.72rem;
+		color: #6b7280;
+		margin: 6px 0 0;
+		line-height: 1.35;
 	}
 	.avatar-chip.active {
 		background: #111827;
