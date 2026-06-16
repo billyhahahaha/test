@@ -31,6 +31,7 @@
 	let bodyGroup, garmentGroup, avatarGroup, labelGroup, shadowPlane;
 	let cloth = null;
 	let clothSettling = 0;
+	let avatarRig = null;
 	let clothingMeshes = [];
 	let ready = false;
 	let loading = false;
@@ -105,7 +106,8 @@
 			thighCm,
 			legOpeningCm,
 			color,
-			fabric
+			fabric,
+			rig: useAvatar ? avatarRig : null
 		});
 		scene.add(cloth.mesh);
 		buildLabels();
@@ -317,7 +319,9 @@
 				loadedUrl = url;
 				loading = false;
 				applyClothesVisibility();
-				scaleAvatar();
+				scaleAvatar(); // extracts rig
+				buildGarment(); // rebuild garment fitted to the avatar's rig
+				frameCamera();
 			},
 			undefined,
 			(err) => {
@@ -341,17 +345,59 @@
 		const s = M(heightCm) / avatarBase.height;
 		avatarGroup.scale.setScalar(s);
 		avatarGroup.position.set(-avatarBase.cx * s, -avatarBase.minY * s, -avatarBase.cz * s);
+		avatarGroup.updateMatrixWorld(true);
+		extractRig();
+	}
+
+	// Read the avatar's skeleton (Avaturn/Mixamo-style names) in *world* space so
+	// the garment can be built around the real legs instead of idealized
+	// height-fractions. Falls back to null when no usable rig is found.
+	function extractRig() {
+		if (!avatarGroup) {
+			avatarRig = null;
+			return;
+		}
+		const bones = {};
+		const want = /^(Hips|Spine|LeftUpLeg|RightUpLeg|LeftLeg|RightLeg|LeftFoot|RightFoot)$/;
+		avatarGroup.traverse((o) => {
+			if (o.isBone && want.test(o.name)) bones[o.name] = o;
+		});
+		const wp = (b) => {
+			const v = new THREE.Vector3();
+			b.getWorldPosition(v);
+			return v;
+		};
+		if (bones.LeftUpLeg && bones.RightUpLeg && bones.LeftFoot) {
+			const lUp = wp(bones.LeftUpLeg);
+			const rUp = wp(bones.RightUpLeg);
+			const lKnee = bones.LeftLeg ? wp(bones.LeftLeg) : null;
+			const lFoot = wp(bones.LeftFoot);
+			const hips = bones.Hips ? wp(bones.Hips) : new THREE.Vector3((lUp.x + rUp.x) / 2, lUp.y, (lUp.z + rUp.z) / 2);
+			const waistTop = bones.Spine ? wp(bones.Spine).y : hips.y + (hips.y - lUp.y) * 0.6;
+			avatarRig = {
+				legX: Math.abs(lUp.x - rUp.x) / 2,
+				cz: hips.z,
+				hipY: hips.y,
+				upLegY: lUp.y,
+				kneeY: lKnee ? lKnee.y : (lUp.y + lFoot.y) / 2,
+				ankleY: lFoot.y,
+				waistY: waistTop
+			};
+		} else {
+			avatarRig = null;
+		}
 	}
 
 	function update() {
 		if (!ready) return;
-		buildGarment();
 		if (useAvatar) {
 			clearGroup('bodyGroup');
-			scaleAvatar();
+			scaleAvatar(); // positions avatar + extracts rig FIRST
 		} else {
+			avatarRig = null;
 			buildBody();
 		}
+		buildGarment(); // now build the garment around the (just-extracted) rig
 		frameCamera();
 	}
 

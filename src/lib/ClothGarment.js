@@ -37,7 +37,8 @@ export function buildClothTrousers(opts) {
 		legOpeningCm = 38,
 		color = '#23262b',
 		fabric = 'gabardine',
-		ease = 1.12
+		ease = 1.12,
+		rig = null
 	} = opts;
 
 	const fab = FABRICS[fabric] || FABRICS.gabardine;
@@ -46,18 +47,35 @@ export function buildClothTrousers(opts) {
 
 	const SEG = 28; // segments around each tube
 	const H = M(heightCm);
-	const waistY = 0.6 * H;
-	const hipY = 0.53 * H;
-	const crotchY = waistY - M(riseCm);
-	const hemY = crotchY - M(inseamCm);
-	const kneeY = crotchY - (crotchY - hemY) * 0.5;
+
+	// Vertical landmarks + leg placement. When we have the avatar's rig we anchor
+	// these to the real bone positions so the garment fits the actual legs;
+	// otherwise we fall back to anthropometric height-fractions.
+	let waistY, hipY, crotchY, hemY, kneeY, legX, cz;
+	if (rig) {
+		crotchY = rig.upLegY; // crotch ~ top of the leg bone
+		waistY = crotchY + M(riseCm); // waistband sits exactly `rise` above crotch
+		hipY = (waistY + crotchY) / 2; // hip line between waist and crotch
+		kneeY = rig.kneeY;
+		// hem follows the garment inseam down from the crotch, but never below ankle
+		hemY = Math.max(rig.ankleY, crotchY - M(inseamCm));
+		legX = Math.max(rig.legX, 0.04);
+		cz = rig.cz || 0;
+	} else {
+		waistY = 0.6 * H;
+		hipY = 0.53 * H;
+		crotchY = waistY - M(riseCm);
+		hemY = crotchY - M(inseamCm);
+		kneeY = crotchY - (crotchY - hemY) * 0.5;
+		legX = (rad(hipCm) * ease) * 0.5;
+		cz = 0;
+	}
 
 	const waistR = rad(waistCm) * ease;
 	const hipR = rad(hipCm) * ease;
 	const thighR = rad(thighCm) * ease;
 	const hemR = rad(legOpeningCm) * ease;
 	const kneeR = thighR * 0.6 + hemR * 0.4;
-	const legX = hipR * 0.5;
 
 	// collider radii: the actual limb the cloth rests on (a bit smaller than the
 	// garment so there is slack to fold).
@@ -81,7 +99,7 @@ export function buildClothTrousers(opts) {
 			for (let s = 0; s < SEG; s++) {
 				const a = (s / SEG) * Math.PI * 2;
 				const x = centerX + Math.cos(a) * r;
-				const z = Math.sin(a) * r;
+				const z = cz + Math.sin(a) * r;
 				const idx = pos.length / 3;
 				pos.push(x, y, z);
 				prev.push(x, y, z);
@@ -185,7 +203,7 @@ export function buildClothTrousers(opts) {
 	// ---- colliders ----
 	const legColliders = [];
 	for (const sx of [-1, 1]) {
-		legColliders.push({ x: sx * legX, top: crotchY, mid: kneeY, bot: hemY, rTop: legColR, rMid: kneeColR, rBot: ankleColR });
+		legColliders.push({ x: sx * legX, z: cz, top: crotchY, mid: kneeY, bot: hemY, rTop: legColR, rMid: kneeColR, rBot: ankleColR });
 	}
 	const hip = { y: (hipY + crotchY) / 2, r: hipR * 0.82 };
 
@@ -194,12 +212,13 @@ export function buildClothTrousers(opts) {
 			if (W[i] === 0) continue;
 			const ix = i * 3;
 			let x = P[ix], y = P[ix + 1], z = P[ix + 2];
-			// hip sphere-ish (xz radius) above crotch
+			// hip sphere-ish (xz radius) above crotch, centred on the body
 			if (y > crotchY - 0.02) {
-				const d = Math.hypot(x, z);
+				const zr = z - cz;
+				const d = Math.hypot(x, zr);
 				if (d < hip.r && d > 1e-5) {
 					const push = hip.r / d;
-					x *= push; z *= push;
+					x *= push; z = cz + zr * push;
 				}
 			}
 			// legs: radial capsule in xz around each leg axis, radius lerped by y
@@ -213,12 +232,12 @@ export function buildClothTrousers(opts) {
 					const t = (c.mid - y) / (c.mid - c.bot);
 					r = c.rMid + (c.rBot - c.rMid) * t;
 				}
-				const dx = x - c.x, dz = z;
+				const dx = x - c.x, dz = z - c.z;
 				const d = Math.hypot(dx, dz);
 				if (d < r && d > 1e-5) {
 					const push = r / d;
 					x = c.x + dx * push;
-					z = dz * push;
+					z = c.z + dz * push;
 				}
 			}
 			P[ix] = x; P[ix + 1] = y; P[ix + 2] = z;
