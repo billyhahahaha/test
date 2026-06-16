@@ -25,6 +25,7 @@
 	export let autoRotate = false;
 	export let mode = 'cloth'; // 'cloth' | 'parametric'
 	export let fabric = 'gabardine';
+	export let debugSkeleton = false;
 
 	let container;
 	let renderer, scene, camera, controls, frame, pmrem;
@@ -32,6 +33,8 @@
 	let cloth = null;
 	let clothSettling = 0;
 	let avatarRig = null;
+	let debugGroup = null;
+	let rigInfo = ''; // human-readable rig dump for on-screen diagnostics
 	let clothingMeshes = [];
 	let ready = false;
 	let loading = false;
@@ -381,11 +384,54 @@
 				upLegY: lUp.y,
 				kneeY: lKnee ? lKnee.y : (lUp.y + lFoot.y) / 2,
 				ankleY: lFoot.y,
-				waistY: waistTop
+				waistY: waistTop,
+				_raw: { lUp, rUp, lKnee, lFoot, hips }
 			};
+			rigInfo =
+				`rig: hipY=${hips.y.toFixed(2)} upLegY=${lUp.y.toFixed(2)} ` +
+				`kneeY=${avatarRig.kneeY.toFixed(2)} ankleY=${lFoot.y.toFixed(2)} ` +
+				`legX=${avatarRig.legX.toFixed(3)} cz=${hips.z.toFixed(2)}`;
 		} else {
 			avatarRig = null;
+			const found = [];
+			avatarGroup.traverse((o) => {
+				if (o.isBone) found.push(o.name);
+			});
+			rigInfo = found.length
+				? `no leg bones matched. bones: ${found.slice(0, 8).join(', ')}…`
+				: 'no skeleton found in this avatar';
 		}
+		drawDebug();
+	}
+
+	// Draw colored dots at the detected bones (yellow) and the garment landmark
+	// heights (cyan) so misalignment is visible at a glance.
+	function drawDebug() {
+		if (debugGroup) {
+			scene.remove(debugGroup);
+			debugGroup.traverse((o) => o.geometry && o.geometry.dispose());
+			debugGroup = null;
+		}
+		if (!debugSkeleton || !avatarRig) return;
+		debugGroup = new THREE.Group();
+		const dot = (x, y, z, color, r = 0.022) => {
+			const m = new THREE.Mesh(
+				new THREE.SphereGeometry(r, 12, 12),
+				new THREE.MeshBasicMaterial({ color, depthTest: false })
+			);
+			m.position.set(x, y, z);
+			m.renderOrder = 999;
+			debugGroup.add(m);
+		};
+		const R = avatarRig._raw;
+		// yellow = actual bones
+		for (const b of [R.lUp, R.rUp, R.lKnee, R.lFoot, R.hips]) if (b) dot(b.x, b.y, b.z, 0xffd400);
+		// cyan = garment landmark heights at the body centre/leg lines
+		const cz = avatarRig.cz;
+		dot(0, avatarRig.upLegY + M(riseCm), cz, 0x22d3ee, 0.03); // waistband target
+		dot(avatarRig.legX, avatarRig.upLegY, cz, 0x22d3ee); // leg top
+		dot(avatarRig.legX, avatarRig.ankleY, cz, 0x22d3ee); // hem
+		scene.add(debugGroup);
 	}
 
 	function update() {
@@ -497,6 +543,7 @@
 	$: if (ready) applyClothesVisibility(hideAvatarClothes);
 	$: if (labelGroup) labelGroup.visible = showLabels;
 	$: if (controls) controls.autoRotate = autoRotate;
+	$: if (ready) { debugSkeleton; drawDebug(); }
 	$: heightCm, waistCm, hipCm, riseCm, inseamCm, thighCm, legOpeningCm, footLenCm, color, unit, mode, fabric, update();
 </script>
 
@@ -505,6 +552,9 @@
 		<div class="status">Loading your avatar…</div>
 	{:else if loadError}
 		<div class="status err">{loadError}</div>
+	{/if}
+	{#if debugSkeleton && rigInfo}
+		<div class="rigdump">{rigInfo}</div>
 	{/if}
 </div>
 <p class="hint">Drag to rotate · scroll to zoom · right-drag to pan</p>
@@ -532,6 +582,18 @@
 	}
 	.status.err {
 		background: rgba(220, 38, 38, 0.9);
+	}
+	.rigdump {
+		position: absolute;
+		left: 8px;
+		bottom: 8px;
+		background: rgba(17, 24, 39, 0.82);
+		color: #a7f3d0;
+		font: 11px/1.4 ui-monospace, monospace;
+		padding: 5px 8px;
+		border-radius: 6px;
+		max-width: 92%;
+		z-index: 3;
 	}
 	.hint {
 		text-align: center;

@@ -12,6 +12,7 @@
 	let autoRotate = false;
 	let garmentMode = 'cloth'; // 'cloth' | 'parametric'
 	let fabric = 'gabardine';
+	let debugSkeleton = false;
 	const FABRICS = ['gabardine', 'wool', 'cotton', 'denim', 'linen', 'silk'];
 
 	let showCreator = false;
@@ -496,6 +497,7 @@
 				<label><input type="checkbox" bind:checked={hideClothes} /> Hide avatar’s clothes</label>
 				<label><input type="checkbox" bind:checked={showLabels} /> Labels</label>
 				<label><input type="checkbox" bind:checked={autoRotate} /> Spin</label>
+				<label title="Show detected skeleton (yellow) vs garment landmarks (cyan)"><input type="checkbox" bind:checked={debugSkeleton} /> 🦴 Debug</label>
 			</div>
 			<Viewer3D
 				heightCm={body.heightIn * 2.54}
@@ -514,6 +516,7 @@
 				{autoRotate}
 				mode={garmentMode}
 				{fabric}
+				{debugSkeleton}
 			/>
 		{:else}
 		<svg viewBox="0 0 {W} {H}" width="100%" height="100%">
