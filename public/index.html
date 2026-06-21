@@ -1,18 +1,31 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-	<meta charset='utf-8'>
-	<meta name='viewport' content='width=device-width,initial-scale=1'>
-
-	<title>Outfit Studio</title>
-
-	<link rel='icon' type='image/png' href='/favicon.png'>
-	<link rel='stylesheet' href='/global.css'>
-	<link rel='stylesheet' href='/build/bundle.css'>
-
-	<script defer src='/build/bundle.js'></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <meta name="theme-color" content="#07090a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="ANGC Greens" />
+  <meta name="description" content="Angeles National Golf Club — a green-by-green guide. Slope, break and tips for all 18 greens in an iOS-style web app." />
+  <title>Angeles National · Green Guide</title>
+  <link rel="icon" type="image/png" href="/favicon.png" />
+  <link rel="apple-touch-icon" href="/favicon.png" />
+  <link rel="stylesheet" href="/styles.css" />
 </head>
-
 <body>
+  <header class="topbar">
+    <div class="mark"><span class="dot"></span> ANGELES NATIONAL</div>
+    <div class="loc">Green Guide</div>
+  </header>
+
+  <main class="app" id="app"></main>
+
+  <section class="sheet" id="sheet" aria-hidden="true">
+    <div class="sheet-inner" id="sheet-inner"></div>
+  </section>
+
+  <script src="/data.js"></script>
+  <script src="/app.js"></script>
 </body>
 </html>
