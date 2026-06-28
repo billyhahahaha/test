@@ -24,6 +24,17 @@
   /* ---------- halftone heat map (dot-screen from the slope grid) ---------- */
   // exact tones from the reference: steep=red, mid=green, flat=blue
   var HEAT = { red: [229, 24, 29], green: [90, 193, 61], blue: [35, 123, 200], bg: [10, 20, 23] };
+  // lighter companion tone per colour: same hue, scaled saturation (+ optional lightness lift)
+  function desat(c, sf, lift) {
+    var r = c[0] / 255, g = c[1] / 255, b = c[2] / 255, mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn, h = 0, s = 0;
+    if (d) { s = d / (1 - Math.abs(2 * l - 1)); if (mx === r) h = ((g - b) / d) % 6; else if (mx === g) h = (b - r) / d + 2; else h = (r - g) / d + 4; h *= 60; if (h < 0) h += 360; }
+    s *= sf; l = Math.min(1, l + (lift || 0));
+    var cc = (1 - Math.abs(2 * l - 1)) * s, x = cc * (1 - Math.abs((h / 60) % 2 - 1)), m = l - cc / 2, rp, gp, bp;
+    if (h < 60) { rp = cc; gp = x; bp = 0; } else if (h < 120) { rp = x; gp = cc; bp = 0; } else if (h < 180) { rp = 0; gp = cc; bp = x; } else if (h < 240) { rp = 0; gp = x; bp = cc; } else if (h < 300) { rp = x; gp = 0; bp = cc; } else { rp = cc; gp = 0; bp = x; }
+    return [Math.round((rp + m) * 255), Math.round((gp + m) * 255), Math.round((bp + m) * 255)];
+  }
+  // blue's light tone is much lighter (≈30% of the prior 0.6 saturation) + a lift; green/red keep 0.6
+  HEAT.blueL = desat(HEAT.blue, 0.18, 0.16); HEAT.greenL = desat(HEAT.green, 0.6, 0); HEAT.redL = desat(HEAT.red, 0.6, 0);
   function greenMap(h) {
     return '<canvas class="greenmap" id="heatcv" aria-label="Halftone slope heat map of the hole ' + h.n + ' green"></canvas>';
   }
@@ -48,25 +59,29 @@
     var ctx = cv.getContext("2d"), img = ctx.createImageData(W, H), D = img.data;
     var P = 6.5 * dpr, maxR = P * 0.74;
     function cl(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
-    // blue widened so flat zones read blue across more of the range
-    var ch = [
-      { c: HEAT.blue,  cs: Math.cos(0.26), sn: Math.sin(0.26), amt: function (t) { return cl(1 - t / 0.60); } },
-      { c: HEAT.green, cs: Math.cos(0.79), sn: Math.sin(0.79), amt: function (t) { return cl(1 - Math.abs(t - 0.62) * 2.1); } },
-      { c: HEAT.red,   cs: Math.cos(1.31), sn: Math.sin(1.31), amt: function (t) { return cl((t - 0.66) / 0.34); } }
+    // six tones across the slope: each colour as a full tone + a lighter
+    // (40% less saturation, 20% smaller dots) tone to bring out undulation depth.
+    // ordered flat -> steep; blue widened so flat zones stay blue.
+    var WID = 0.15, ang = [0.20, 1.05, 0.55, 1.30, 0.85, 1.50];
+    var tones = [
+      { col: HEAT.blueL,  rf: 0.8, c: 0.083 }, { col: HEAT.blue,  rf: 1.0, c: 0.25 },
+      { col: HEAT.greenL, rf: 0.8, c: 0.417 }, { col: HEAT.green, rf: 1.0, c: 0.583 },
+      { col: HEAT.redL,   rf: 0.8, c: 0.75 },  { col: HEAT.red,   rf: 1.0, c: 0.917 }
     ];
+    for (var i = 0; i < 6; i++) { tones[i].cs = Math.cos(ang[i]); tones[i].sn = Math.sin(ang[i]); }
     for (var y = 0; y < H; y++) {
       var fy = y / H * gh;
       for (var x = 0; x < W; x++) {
         var t = sampleGrid(g, gw, gh, x / W * gw, fy), di = (y * W + x) * 4;
         if (t < 0) { D[di + 3] = 0; continue; }
         var r = HEAT.bg[0], gr = HEAT.bg[1], b = HEAT.bg[2];
-        for (var c = 0; c < 3; c++) {
-          var a = ch[c].amt(t); if (a <= 0.002) continue;
-          var u = x * ch[c].cs + y * ch[c].sn, w = -x * ch[c].sn + y * ch[c].cs;
+        for (var c = 0; c < 6; c++) {
+          var a = cl(1 - Math.abs(t - tones[c].c) / WID); if (a <= 0.002) continue;
+          var u = x * tones[c].cs + y * tones[c].sn, w = -x * tones[c].sn + y * tones[c].cs;
           var du = u - Math.round(u / P) * P, dv = w - Math.round(w / P) * P;
-          var cov = maxR * Math.sqrt(a) - Math.sqrt(du * du + dv * dv) + 0.5;
+          var cov = tones[c].rf * maxR * Math.sqrt(a) - Math.sqrt(du * du + dv * dv) + 0.5;
           if (cov <= 0) continue; if (cov > 1) cov = 1;
-          var col = ch[c].c; r = r * (1 - cov) + col[0] * cov; gr = gr * (1 - cov) + col[1] * cov; b = b * (1 - cov) + col[2] * cov;
+          var col = tones[c].col; r = r * (1 - cov) + col[0] * cov; gr = gr * (1 - cov) + col[1] * cov; b = b * (1 - cov) + col[2] * cov;
         }
         D[di] = r; D[di + 1] = gr; D[di + 2] = b; D[di + 3] = 255;
       }
