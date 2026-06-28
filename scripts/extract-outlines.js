@@ -44,7 +44,7 @@ function build(png) {
   const scal = new Float32Array(cols * rows).fill(NaN);
   for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) { if (!m[y * cols + x]) continue; const i = ((y * STEP) * W + x * STEP) * 4, r = d[i], g = d[i + 1], b = d[i + 2]; if (sat(r, g, b) > 0.3 && val(r, g, b) > 0.3) { let hh = hue(r, g, b); if (hh < 0) continue; if (hh > 250) hh = 250; scal[y * cols + x] = 250 - hh; } }
   for (let it = 0; it < 40; it++) { let changed = 0; const nx = scal.slice(); for (let y = b0; y < b1; y++) for (let x = 0; x < cols; x++) { const p = y * cols + x; if (!m[p] || !Number.isNaN(scal[p])) continue; let s = 0, n = 0; for (const q of [p - 1, p + 1, p - cols, p + cols]) if (q >= 0 && q < scal.length && !Number.isNaN(scal[q])) { s += scal[q]; n++; } if (n) { nx[p] = s / n; changed++; } } scal.set(nx); if (!changed) break; }
-  for (let pass = 0; pass < 7; pass++) { const nx = scal.slice(); for (let y = 1; y < rows - 1; y++) for (let x = 1; x < cols - 1; x++) { const p = y * cols + x; if (!m[p] || Number.isNaN(scal[p])) continue; let s = 0, n = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const q = p + dy * cols + dx; if (!Number.isNaN(scal[q]) && m[q]) { s += scal[q]; n++; } } nx[p] = s / n; } scal.set(nx); }
+  for (let pass = 0; pass < 14; pass++) { const nx = scal.slice(); for (let y = 1; y < rows - 1; y++) for (let x = 1; x < cols - 1; x++) { const p = y * cols + x; if (!m[p] || Number.isNaN(scal[p])) continue; let s = 0, n = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const q = p + dy * cols + dx; if (!Number.isNaN(scal[q]) && m[q]) { s += scal[q]; n++; } } nx[p] = s / n; } scal.set(nx); }
   return { m, me, scal, cols, rows };
 }
 
@@ -132,7 +132,7 @@ for (const f of fs.readdirSync(SRC).filter(x => x.endsWith('.png'))) {
   const sc = 100 / (maxx - minx), h = +((maxy - miny) * sc).toFixed(2);
   const norm = p => [(p[0] - minx) * sc, (p[1] - miny) * sc];
   // outline
-  let loop = traceMask(m, cols, rows); loop = dp(loop, 1.4); loop = despike(loop, true); loop = chaikin(loop, 3, true); loop = dp(loop, 0.35);
+  let loop = traceMask(m, cols, rows); loop = chaikin(loop, 2, true); loop = dp(loop, 0.9); loop = despike(loop, true); loop = chaikin(loop, 4, true); loop = dp(loop, 0.18);
   const dPath = cubic(loop.map(norm), true);
   // contours
   let mn = 9e9, mx = -9e9; for (let p = 0; p < scal.length; p++) if (m[p] && !Number.isNaN(scal[p])) { if (scal[p] < mn) mn = scal[p]; if (scal[p] > mx) mx = scal[p]; }
@@ -142,12 +142,12 @@ for (const f of fs.readdirSync(SRC).filter(x => x.endsWith('.png'))) {
     const lvl = mn + (mx - mn) * i / NLEV;
     const lines = chain(isoLines(scal, me, cols, rows, lvl));   // eroded domain -> off the edge
     for (let line of lines) {
-      line = dp(line, 0.8);
+      line = chaikin(line, 1, false); line = dp(line, 0.7);
       if (line.length > 6) line = line.slice(1, -1);            // trim ends so they don't poke the outline
       if (line.length < 4) continue;
       const np = line.map(norm);
       if (extent(np) < 12) continue;                            // drop arrow-stipple / tiny noise loops
-      let sm = despike(line, false); sm = chaikin(sm, 2, false); sm = dp(sm, 0.3);
+      let sm = despike(line, false); sm = chaikin(sm, 3, false); sm = dp(sm, 0.18);
       const cd = cubic(sm.map(norm), false); if (cd) contours.push(cd);
     }
   }
