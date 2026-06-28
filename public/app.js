@@ -21,10 +21,56 @@
     tip: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10c1 1 1 2 1 3h6c0-1 0-2 1-3a6 6 0 0 0-4-10z"/></svg>',
   };
 
-  /* ---------- green map (real surveyed GPS slope data) ---------- */
+  /* ---------- halftone heat map (dot-screen from the slope grid) ---------- */
+  // exact tones from the reference: steep=red, mid=green, flat=blue
+  var HEAT = { red: [229, 24, 29], green: [90, 193, 61], blue: [35, 123, 200], bg: [10, 20, 23] };
   function greenMap(h) {
-    return '<img class="greenmap" src="/greens/hole' + h.n + '.jpg" loading="lazy" ' +
-      'alt="Surveyed slope and fall-line map of the hole ' + h.n + ' green">';
+    return '<canvas class="greenmap" id="heatcv" aria-label="Halftone slope heat map of the hole ' + h.n + ' green"></canvas>';
+  }
+  function decodeGrid(b64) { var s = atob(b64), a = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); return a; }
+  function sampleGrid(g, gw, gh, fx, fy) {
+    var ix = Math.max(0, Math.min(gw - 1, Math.floor(fx))), iy = Math.max(0, Math.min(gh - 1, Math.floor(fy)));
+    var nv = g[iy * gw + ix]; if (nv === 255) return -1;
+    var x1 = Math.min(gw - 1, ix + 1), y1 = Math.min(gh - 1, iy + 1), tx = fx - ix, ty = fy - iy;
+    function v(i, j) { var q = g[j * gw + i]; return q === 255 ? nv : q; }
+    var a = v(ix, iy), b = v(x1, iy), c = v(ix, y1), d = v(x1, y1);
+    var top = a + (b - a) * tx, bot = c + (d - c) * tx; return (top + (bot - top) * ty) / 254;
+  }
+  function drawHeat(h) {
+    var o = (typeof GREEN_OUTLINES !== "undefined") && GREEN_OUTLINES[h.n];
+    var cv = document.getElementById("heatcv"); if (!o || !o.hg || !cv) return;
+    var g = decodeGrid(o.hg), gw = o.hw, gh = o.hh;
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    var cssW = Math.min(340, (sheet.clientWidth || 360) - 36), cssH = Math.round(cssW * gh / gw);
+    cv.style.width = cssW + "px"; cv.style.height = cssH + "px";
+    var W = Math.round(cssW * dpr), H = Math.round(cssH * dpr);
+    cv.width = W; cv.height = H;
+    var ctx = cv.getContext("2d"), img = ctx.createImageData(W, H), D = img.data;
+    var P = 6.5 * dpr, maxR = P * 0.74;
+    function cl(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+    var ch = [
+      { c: HEAT.blue,  cs: Math.cos(0.26), sn: Math.sin(0.26), amt: function (t) { return cl(1 - 2 * t); } },
+      { c: HEAT.green, cs: Math.cos(0.79), sn: Math.sin(0.79), amt: function (t) { return cl(1 - Math.abs(t - 0.5) * 2); } },
+      { c: HEAT.red,   cs: Math.cos(1.31), sn: Math.sin(1.31), amt: function (t) { return cl(2 * t - 1); } }
+    ];
+    for (var y = 0; y < H; y++) {
+      var fy = y / H * gh;
+      for (var x = 0; x < W; x++) {
+        var t = sampleGrid(g, gw, gh, x / W * gw, fy), di = (y * W + x) * 4;
+        if (t < 0) { D[di + 3] = 0; continue; }
+        var r = HEAT.bg[0], gr = HEAT.bg[1], b = HEAT.bg[2];
+        for (var c = 0; c < 3; c++) {
+          var a = ch[c].amt(t); if (a <= 0.002) continue;
+          var u = x * ch[c].cs + y * ch[c].sn, w = -x * ch[c].sn + y * ch[c].cs;
+          var du = u - Math.round(u / P) * P, dv = w - Math.round(w / P) * P;
+          var cov = maxR * Math.sqrt(a) - Math.sqrt(du * du + dv * dv) + 0.5;
+          if (cov <= 0) continue; if (cov > 1) cov = 1;
+          var col = ch[c].c; r = r * (1 - cov) + col[0] * cov; gr = gr * (1 - cov) + col[1] * cov; b = b * (1 - cov) + col[2] * cov;
+        }
+        D[di] = r; D[di + 1] = gr; D[di + 2] = b; D[di + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
   }
 
   // neon outline + topographic contour lines, traced from the surveyed data
@@ -144,7 +190,7 @@
         '<div class="green-stage">' + greenOutline(h) + greenMap(h) + '</div>' +
         '<div class="legend">' +
           '<span class="l-out"><span class="hi">● outline</span><span>· slope contours ·</span><span>steeper = tighter lines</span></span>' +
-          '<span class="l-heat"><span class="hi">● warm = steeper</span><span>arrows = downhill</span><span>cooler = flatter ●</span></span>' +
+          '<span class="l-heat"><span class="hi">● red = steep</span><span>green = mid</span><span>blue = flat ●</span></span>' +
         '</div>' +
       '</div>' +
       '<p style="color:var(--muted);font-size:14.5px;line-height:1.6;margin:0 2px 14px">' + h.summary + '</p>' +
@@ -153,13 +199,14 @@
         '<div class="gblock brk"><div class="lab">' + IC.brk + 'Break</div><p>' + h.break + '</p></div>' +
         '<div class="gblock tip"><div class="lab">' + IC.tip + 'Play It</div><p>' + h.tips + '</p></div>' +
       '</div>' +
-      '<p class="disc"><b>Real surveyed green data.</b> The outline and topographic contour lines are traced from on-course GPS green mapping; toggle <b>Heat</b> for the full colour slope map (warmer = steeper, arrows point downhill). The Slope / Break / Play-It notes interpret that data with local knowledge. Confirm with your own read on the day.</p>' +
+      '<p class="disc"><b>Real surveyed green data.</b> The outline and topographic contour lines are traced from on-course GPS green mapping; toggle <b>Heat</b> for the halftone slope map — red is steepest, green mid, blue flattest. The Slope / Break / Play-It notes interpret that data with local knowledge. Confirm with your own read on the day.</p>' +
       navPrevNext(h.n);
 
     sheet.classList.add("open");
     sheet.scrollTop = 0;
     document.body.style.overflow = "hidden";
     document.getElementById("closeSheet").onclick = closeHole;
+    drawHeat(h);
     var gt = document.getElementById("greenToggle");
     if (gt) gt.addEventListener("click", function (e) {
       var b = e.target.closest("button"); if (!b) return;

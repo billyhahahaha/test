@@ -151,8 +151,16 @@ for (const f of fs.readdirSync(SRC).filter(x => x.endsWith('.png'))) {
       const cd = cubic(sm.map(norm), false); if (cd) contours.push(cd);
     }
   }
-  result[hole] = { d: dPath, h, c: contours };
-  console.log('hole' + hole, 'outline pts', loop.length, 'contours', contours.length, 'h', h);
+  // compact slope grid (0..254 normalised, 255 = outside) for the halftone heat view
+  const GW = 64, cell = (maxx - minx) / GW, GH = Math.max(1, Math.round((maxy - miny) / cell));
+  const grid = Buffer.alloc(GW * GH);
+  for (let gj = 0; gj < GH; gj++) for (let gi = 0; gi < GW; gi++) {
+    const gx = Math.round(minx + (gi + 0.5) * cell), gy = Math.round(miny + (gj + 0.5) * cell), idx = gy * cols + gx;
+    if (gx < 0 || gy < 0 || gx >= cols || gy >= rows || !m[idx] || Number.isNaN(scal[idx])) grid[gj * GW + gi] = 255;
+    else grid[gj * GW + gi] = Math.max(0, Math.min(254, Math.round((scal[idx] - mn) / (mx - mn) * 254)));
+  }
+  result[hole] = { d: dPath, h, c: contours, hw: GW, hh: GH, hg: grid.toString('base64') };
+  console.log('hole' + hole, 'outline pts', loop.length, 'contours', contours.length, 'grid', GW + 'x' + GH);
 }
 fs.writeFileSync(OUTJS, 'var GREEN_OUTLINES = ' + JSON.stringify(result) + ';\n');
 console.log('wrote', OUTJS, (fs.statSync(OUTJS).size / 1024).toFixed(1) + 'KB');
