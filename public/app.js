@@ -28,7 +28,6 @@
     return '<canvas class="greenmap" id="heatcv" aria-label="Halftone slope heat map of the hole ' + h.n + ' green"></canvas>';
   }
   function decodeGrid(b64) { var s = atob(b64), a = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); return a; }
-  function hash(i, j) { var n = (i * 374761393 + j * 668265263) | 0; n = n ^ (n >>> 13); n = Math.imul(n, 1274126177); n = n ^ (n >>> 16); return ((n >>> 0) % 1000) / 1000; }
   function sampleGrid(g, gw, gh, fx, fy) {
     var ix = Math.max(0, Math.min(gw - 1, Math.floor(fx))), iy = Math.max(0, Math.min(gh - 1, Math.floor(fy)));
     var nv = g[iy * gw + ix]; if (nv === 255) return -1;
@@ -47,12 +46,13 @@
     var W = Math.round(cssW * dpr), H = Math.round(cssH * dpr);
     cv.width = W; cv.height = H;
     var ctx = cv.getContext("2d"), img = ctx.createImageData(W, H), D = img.data;
-    var P = 3.5 * dpr, maxR = P * 0.86;
+    var P = 6.5 * dpr, maxR = P * 0.74;
     function cl(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+    // blue widened so flat zones read blue across more of the range
     var ch = [
-      { c: HEAT.blue,  cs: Math.cos(0.26), sn: Math.sin(0.26), amt: function (t) { return cl(1 - 2 * t); } },
-      { c: HEAT.green, cs: Math.cos(0.79), sn: Math.sin(0.79), amt: function (t) { return cl(1 - Math.abs(t - 0.5) * 2); } },
-      { c: HEAT.red,   cs: Math.cos(1.31), sn: Math.sin(1.31), amt: function (t) { return cl(2 * t - 1); } }
+      { c: HEAT.blue,  cs: Math.cos(0.26), sn: Math.sin(0.26), amt: function (t) { return cl(1 - t / 0.60); } },
+      { c: HEAT.green, cs: Math.cos(0.79), sn: Math.sin(0.79), amt: function (t) { return cl(1 - Math.abs(t - 0.62) * 2.1); } },
+      { c: HEAT.red,   cs: Math.cos(1.31), sn: Math.sin(1.31), amt: function (t) { return cl((t - 0.66) / 0.34); } }
     ];
     for (var y = 0; y < H; y++) {
       var fy = y / H * gh;
@@ -67,14 +67,6 @@
           var cov = maxR * Math.sqrt(a) - Math.sqrt(du * du + dv * dv) + 0.5;
           if (cov <= 0) continue; if (cov > 1) cov = 1;
           var col = ch[c].c; r = r * (1 - cov) + col[0] * cov; gr = gr * (1 - cov) + col[1] * cov; b = b * (1 - cov) + col[2] * cov;
-        }
-        // cream speckle (#d6d8c8), denser in the mid zones — reference grain
-        var Pc = 2.6 * dpr, cu = x * 0.8776 + y * 0.4794, cw = -x * 0.4794 + y * 0.8776;
-        var ci = Math.round(cu / Pc), cj = Math.round(cw / Pc);
-        if (hash(ci, cj) < 0.26 + 0.30 * ch[1].amt(t)) {
-          var ddu = cu - ci * Pc, ddv = cw - cj * Pc, crad = Pc * 0.40 * (0.45 + hash(ci + 7, cj - 3));
-          var ccov = crad - Math.sqrt(ddu * ddu + ddv * ddv) + 0.5;
-          if (ccov > 0) { if (ccov > 1) ccov = 1; r = r * (1 - ccov) + 214 * ccov; gr = gr * (1 - ccov) + 216 * ccov; b = b * (1 - ccov) + 200 * ccov; }
         }
         D[di] = r; D[di + 1] = gr; D[di + 2] = b; D[di + 3] = 255;
       }
