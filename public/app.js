@@ -5,6 +5,7 @@
   var app = document.getElementById("app");
   var sheet = document.getElementById("sheet");
   var activeSide = "front";
+  var greenMode = "outline"; // "outline" | "heat"
 
   /* ---------- small helpers ---------- */
   function el(html) { var t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstChild; }
@@ -24,6 +25,17 @@
   function greenMap(h) {
     return '<img class="greenmap" src="/greens/hole' + h.n + '.jpg" loading="lazy" ' +
       'alt="Surveyed slope and fall-line map of the hole ' + h.n + ' green">';
+  }
+
+  // neon outline + topographic contour lines, traced from the surveyed data
+  function greenOutline(h) {
+    var o = (typeof GREEN_OUTLINES !== "undefined") && GREEN_OUTLINES[h.n];
+    if (!o) return '<div class="no-outline">outline unavailable</div>';
+    var cont = (o.c || []).map(function (d) { return '<path d="' + d + '" class="cont"/>'; }).join("");
+    return '<svg class="greensvg" viewBox="-3 -3 106 ' + (o.h + 6) + '" preserveAspectRatio="xMidYMid meet" aria-label="Outline and slope contours of the hole ' + h.n + ' green">' +
+      '<g class="contours">' + cont + '</g>' +
+      '<path d="' + o.d + '" class="gline"/>' +
+    '</svg>';
   }
 
   /* ---------- views ---------- */
@@ -121,10 +133,19 @@
           '<div class="hd-stat"><b>' + h.hcp + '</b><span>Hcp Index</span></div>' +
         '</div>' +
       '</div>' +
-      '<div class="green-wrap">' +
-        '<div class="map-head"><span class="ttl">Surveyed Green Data</span><div class="sev">' + sev + '<span>Break</span></div></div>' +
-        greenMap(h) +
-        '<div class="legend"><span class="hi">● warm = steeper</span><span>arrows = downhill fall-line</span><span>cooler = flatter ●</span></div>' +
+      '<div class="green-wrap' + (greenMode === "heat" ? " show-heat" : "") + '" id="greenWrap">' +
+        '<div class="map-head">' +
+          '<div class="seg2" id="greenToggle">' +
+            '<button data-mode="outline" class="' + (greenMode === "outline" ? "on" : "") + '">Outline</button>' +
+            '<button data-mode="heat" class="' + (greenMode === "heat" ? "on" : "") + '">Heat</button>' +
+          '</div>' +
+          '<div class="sev">' + sev + '<span>Break</span></div>' +
+        '</div>' +
+        '<div class="green-stage">' + greenOutline(h) + greenMap(h) + '</div>' +
+        '<div class="legend">' +
+          '<span class="l-out"><span class="hi">● outline</span><span>· slope contours ·</span><span>steeper = tighter lines</span></span>' +
+          '<span class="l-heat"><span class="hi">● warm = steeper</span><span>arrows = downhill</span><span>cooler = flatter ●</span></span>' +
+        '</div>' +
       '</div>' +
       '<p style="color:var(--muted);font-size:14.5px;line-height:1.6;margin:0 2px 14px">' + h.summary + '</p>' +
       '<div class="guide">' +
@@ -132,13 +153,20 @@
         '<div class="gblock brk"><div class="lab">' + IC.brk + 'Break</div><p>' + h.break + '</p></div>' +
         '<div class="gblock tip"><div class="lab">' + IC.tip + 'Play It</div><p>' + h.tips + '</p></div>' +
       '</div>' +
-      '<p class="disc"><b>Real surveyed green data.</b> Shape, slope shading and fall-line arrows are from on-course GPS green mapping — warmer colours are steeper, arrows point downhill. The Slope / Break / Play-It notes interpret that data with local knowledge. Confirm with your own read on the day.</p>' +
+      '<p class="disc"><b>Real surveyed green data.</b> The outline and topographic contour lines are traced from on-course GPS green mapping; toggle <b>Heat</b> for the full colour slope map (warmer = steeper, arrows point downhill). The Slope / Break / Play-It notes interpret that data with local knowledge. Confirm with your own read on the day.</p>' +
       navPrevNext(h.n);
 
     sheet.classList.add("open");
     sheet.scrollTop = 0;
     document.body.style.overflow = "hidden";
     document.getElementById("closeSheet").onclick = closeHole;
+    var gt = document.getElementById("greenToggle");
+    if (gt) gt.addEventListener("click", function (e) {
+      var b = e.target.closest("button"); if (!b) return;
+      greenMode = b.dataset.mode;
+      document.getElementById("greenWrap").classList.toggle("show-heat", greenMode === "heat");
+      gt.querySelectorAll("button").forEach(function (x) { x.classList.toggle("on", x === b); });
+    });
     var pv = document.getElementById("dPrev"), nx = document.getElementById("dNext");
     if (pv) pv.onclick = function () { openHole(n - 1); };
     if (nx) nx.onclick = function () { openHole(n + 1); };

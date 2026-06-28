@@ -4,17 +4,17 @@
    ============================================================ */
 
 :root {
-  --bg: #07090a;
-  --bg-2: #0e1113;
-  --surface: rgba(255, 255, 255, 0.055);
-  --surface-2: rgba(255, 255, 255, 0.09);
-  --hairline: rgba(255, 255, 255, 0.1);
-  --text: #f5f7f6;
-  --muted: #9aa3a1;
-  --faint: #6b7472;
-  --green: #30d158;     /* iOS green — golf + Apple */
-  --green-deep: #16893a;
-  --volt: #c6ff32;      /* Nike energy accent */
+  --bg: #0a1417;
+  --bg-2: #0f1d20;
+  --surface: rgba(255, 255, 255, 0.05);
+  --surface-2: rgba(255, 255, 255, 0.085);
+  --hairline: rgba(120, 230, 175, 0.14);
+  --text: #eef6f1;
+  --muted: #9bb0a8;
+  --faint: #6a8079;
+  --green: #41e08c;     /* neon topo green */
+  --green-deep: #1c9c5e;
+  --volt: #7af0b4;      /* mint accent */
   --water: #2aa6ff;
   --sand: #e7d9a6;
   --radius: 24px;
@@ -38,8 +38,8 @@ body {
   font-family: var(--font);
   color: var(--text);
   background:
-    radial-gradient(1100px 600px at 78% -8%, rgba(48, 209, 88, 0.16), transparent 60%),
-    radial-gradient(900px 520px at 10% 8%, rgba(42, 166, 255, 0.08), transparent 55%),
+    radial-gradient(1100px 600px at 78% -8%, rgba(65, 224, 140, 0.16), transparent 60%),
+    radial-gradient(900px 520px at 10% 8%, rgba(40, 150, 130, 0.10), transparent 55%),
     linear-gradient(180deg, var(--bg-2), var(--bg) 42%);
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
@@ -270,18 +270,40 @@ body {
   position: relative; overflow: hidden;
 }
 .green-wrap .legend {
-  display: flex; justify-content: space-between; margin-top: 4px;
+  display: flex; justify-content: space-between; margin-top: 6px;
   font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint);
 }
-.green-wrap .legend .hi { color: var(--muted); }
-.green-wrap svg { width: 100%; height: auto; display: block; }
-.map-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.map-head .ttl { font-size: 12px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--green); }
-.greenmap {
-  display: block; width: 100%; max-width: 360px; max-height: 64vh; object-fit: contain;
-  margin: 0 auto 10px; border-radius: 16px; background: #fff;
-  box-shadow: 0 12px 34px rgba(0,0,0,0.5);
+.green-wrap .legend .hi { color: var(--green); }
+.green-wrap .legend > span { display: flex; justify-content: space-between; width: 100%; gap: 8px; }
+.green-wrap .legend .l-heat { display: none; }
+.green-wrap.show-heat .legend .l-out { display: none; }
+.green-wrap.show-heat .legend .l-heat { display: flex; }
+.map-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+
+/* Outline / Heat toggle */
+.seg2 { display: inline-flex; gap: 3px; padding: 3px; background: rgba(0,0,0,0.25); border: 1px solid var(--hairline); border-radius: 100px; }
+.seg2 button {
+  border: 0; background: transparent; color: var(--muted); cursor: pointer;
+  font-family: var(--font); font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 7px 14px; border-radius: 100px; transition: color .25s, background .3s var(--ease);
 }
+.seg2 button.on { color: #05140d; background: var(--green); box-shadow: 0 0 16px rgba(65,224,140,0.45); }
+
+/* stage holds both views */
+.green-stage { display: flex; justify-content: center; align-items: center; min-height: 220px; }
+.greensvg { width: 100%; max-width: 340px; max-height: 60vh; height: auto; display: block; overflow: visible; }
+.greensvg .gline {
+  fill: rgba(65,224,140,0.045); stroke: var(--green); stroke-width: 1.5; stroke-linejoin: round;
+  filter: drop-shadow(0 0 3px rgba(65,224,140,0.7));
+}
+.greensvg .cont { fill: none; stroke: var(--green); stroke-width: 0.55; opacity: 0.45; stroke-linecap: round; stroke-linejoin: round; }
+.greenmap {
+  display: none; width: 100%; max-width: 360px; max-height: 64vh; object-fit: contain;
+  margin: 0 auto; border-radius: 16px; background: #fff; box-shadow: 0 12px 34px rgba(0,0,0,0.5);
+}
+.green-wrap.show-heat .greensvg { display: none; }
+.green-wrap.show-heat .greenmap { display: block; }
+.no-outline { color: var(--faint); font-size: 12px; padding: 40px; }
 .sev {
   display: flex; gap: 4px; align-items: center;
 }
