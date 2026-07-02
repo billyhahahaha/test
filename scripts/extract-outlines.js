@@ -36,10 +36,9 @@ function build(png) {
   const mf = (src, R, mode) => { const t = new Uint8Array(src.length), o = new Uint8Array(src.length), init = mode ? 0 : 1; for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) { let a = init; for (let k = -R; k <= R; k++) { const xx = x + k; if (xx < 0 || xx >= cols) continue; a = mode ? (a | src[y * cols + xx]) : (a & src[y * cols + xx]); } t[y * cols + x] = a; } for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) { let a = init; for (let k = -R; k <= R; k++) { const yy = y + k; if (yy < 0 || yy >= rows) continue; a = mode ? (a | t[yy * cols + x]) : (a & t[yy * cols + x]); } o[y * cols + x] = a; } return o; };
   const lcc = src => { const l = new Int32Array(src.length); let cc = 0, bb = 0, bi = 0; for (let p0 = 0; p0 < src.length; p0++) { if (!src[p0] || l[p0]) continue; cc++; let cnt = 0; const s3 = [p0]; l[p0] = cc; while (s3.length) { const p = s3.pop(); cnt++; const px = p % cols; for (const q of [p - 1, p + 1, p - cols, p + cols]) { if (q < 0 || q >= src.length) continue; if (Math.abs((q % cols) - px) > 1) continue; if (src[q] && !l[q]) { l[q] = cc; s3.push(q); } } } if (cnt > bb) { bb = cnt; bi = cc; } } const o = new Uint8Array(src.length); for (let p = 0; p < o.length; p++) o[p] = l[p] === bi ? 1 : 0; return o; };
   let m = lcc(cand);
-  m = mf(m, 5, 0); m = mf(m, 5, 1); m = lcc(m);   // open R5: sever GPS rings/tags, keep green
-  m = mf(m, 4, 1); m = mf(m, 4, 0);               // close R4: smooth/fill
-  m = mf(m, 2, 0); m = mf(m, 2, 1);               // open R2: shave outline spurs/ticks
-  const me = mf(m, 3, 0);                          // eroded domain for contours (off the edge)
+  m = mf(m, 4, 0); m = mf(m, 4, 1); m = lcc(m);   // open: sever GPS rings/tags, keep green
+  m = mf(m, 2, 1); m = mf(m, 2, 0);               // light close: knock off pixel stair, keep ridges
+  const me = mf(m, 2, 0);                          // eroded domain for contours (off the edge)
   // ---- scalar field from slope colours, inpainted + blurred ----
   const scal = new Float32Array(cols * rows).fill(NaN);
   for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) { if (!m[y * cols + x]) continue; const i = ((y * STEP) * W + x * STEP) * 4, r = d[i], g = d[i + 1], b = d[i + 2]; if (sat(r, g, b) > 0.3 && val(r, g, b) > 0.3) { let hh = hue(r, g, b); if (hh < 0) continue; if (hh > 250) hh = 250; scal[y * cols + x] = 250 - hh; } }
@@ -132,7 +131,8 @@ for (const f of fs.readdirSync(SRC).filter(x => x.endsWith('.png'))) {
   const sc = 100 / (maxx - minx), h = +((maxy - miny) * sc).toFixed(2);
   const norm = p => [(p[0] - minx) * sc, (p[1] - miny) * sc];
   // outline
-  let loop = traceMask(m, cols, rows); loop = chaikin(loop, 2, true); loop = dp(loop, 0.9); loop = despike(loop, true); loop = chaikin(loop, 4, true); loop = dp(loop, 0.18);
+  // light smoothing only: soften the pixel staircase but keep the green's real ridges
+  let loop = traceMask(m, cols, rows); loop = dp(loop, 0.8); loop = despike(loop, true); loop = chaikin(loop, 2, true); loop = dp(loop, 0.45);
   const dPath = cubic(loop.map(norm), true);
   // contours
   let mn = 9e9, mx = -9e9; for (let p = 0; p < scal.length; p++) if (m[p] && !Number.isNaN(scal[p])) { if (scal[p] < mn) mn = scal[p]; if (scal[p] > mx) mx = scal[p]; }
@@ -152,7 +152,7 @@ for (const f of fs.readdirSync(SRC).filter(x => x.endsWith('.png'))) {
     }
   }
   // compact slope grid (0..254 normalised, 255 = outside) for the halftone heat view
-  const GW = 64, cell = (maxx - minx) / GW, GH = Math.max(1, Math.round((maxy - miny) / cell));
+  const GW = 104, cell = (maxx - minx) / GW, GH = Math.max(1, Math.round((maxy - miny) / cell));
   const grid = Buffer.alloc(GW * GH);
   for (let gj = 0; gj < GH; gj++) for (let gi = 0; gi < GW; gi++) {
     const gx = Math.round(minx + (gi + 0.5) * cell), gy = Math.round(miny + (gj + 0.5) * cell), idx = gy * cols + gx;

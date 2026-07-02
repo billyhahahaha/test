@@ -57,7 +57,7 @@
     var W = Math.round(cssW * dpr), H = Math.round(cssH * dpr);
     cv.width = W; cv.height = H;
     var ctx = cv.getContext("2d"), img = ctx.createImageData(W, H), D = img.data;
-    var P = 6.5 * dpr, maxR = P * 0.74;
+    var P = 3.8 * dpr, maxR = P * 0.78;
     function cl(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
     // six tones across the slope: each colour as a full tone + a lighter
     // (40% less saturation, 20% smaller dots) tone to bring out undulation depth.
