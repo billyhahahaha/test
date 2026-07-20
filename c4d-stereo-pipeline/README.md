@@ -7,9 +7,11 @@ deliver MV-HEVC spatial video to Apple Vision Pro.
 | File | Stage | What it does |
 | --- | --- | --- |
 | `c4d_stereo_rig.py` | 1 — shoot | Script Manager script — builds the stereo camera rig in the open scene |
-| `c4d_export_setup.py` | 2 — render | Sets Render Settings + L/R Takes for the Resolve handoff |
+| `c4d_export_setup.py` | 2 — render | Sets Render Settings + L/R Takes for the Resolve handoff (windowed spatial video) |
+| `c4d_vr180_setup.py` | 2-alt — render | Same, but for 180° immersive: square per-eye, spherical 180 cameras, forced-parallel rig |
 | `RESOLVE_TO_VISIONPRO.md` | 3 — finish & deliver | Resolve Studio stereo conform/grade + MV-HEVC spatial export, on-device QC |
-| `package_spatial.py` | 3b | Scripted MV-HEVC packaging (ffmpeg + `spatial` CLI), metadata derived from rig numbers |
+| `APPLE_IMMERSIVE_180.md` | 3-alt | **Apple Immersive Video** (`.aivu` + AIV Utility) and APMP VR180 delivery |
+| `package_spatial.py` | 3b | Scripted MV-HEVC packaging (ffmpeg + `spatial` CLI), metadata derived from rig numbers; `--projection hequ` for VR180 |
 | `stereo_parallax_calc.py` | any | Depth-budget calculator — on-screen parallax + comfort warnings |
 
 ---
@@ -26,6 +28,15 @@ deliver MV-HEVC spatial video to Apple Vision Pro.
 3. **Finish & deliver** — Follow `RESOLVE_TO_VISIONPRO.md`: conform the pair to
    a stereo clip in Resolve Studio, grade linked, then export MV-HEVC (native,
    Compressor, or `package_spatial.py`) and AirDrop to the headset.
+
+**Which Vision Pro deliverable?** Two forks after stage 1:
+
+- **Windowed spatial video** (stereo in a floating, scalable frame) — stages
+  2–3 above. The default for shots, spots and review cuts.
+- **Full 180° immersion** (Apple Immersive Video `.aivu` / APMP VR180 — the
+  world wraps around the viewer, visionOS 26+) — swap stage 2 for
+  `c4d_vr180_setup.py` and stage 3 for `APPLE_IMMERSIVE_180.md`. Different
+  rules apply there: human-locked interaxial, parallel eyes, 60–90 fps.
 
 ## The rig
 
@@ -118,10 +129,11 @@ interaxial for that screen.
 | Target | What to hand over |
 | --- | --- |
 | Dailies / review | Merged anaglyph renders (native path) or anaglyph out of Resolve; cheap red-cyan glasses |
-| **Apple Vision Pro** | **MV-HEVC spatial video — full walkthrough in `RESOLVE_TO_VISIONPRO.md`** |
+| **Apple Vision Pro (windowed)** | **MV-HEVC spatial video — full walkthrough in `RESOLVE_TO_VISIONPRO.md`** |
+| **Apple Vision Pro (immersive)** | **Apple Immersive Video `.aivu` or APMP VR180 — `APPLE_IMMERSIVE_180.md`** |
 | 3D TV / YouTube 3D | Side-by-side (full or half width) + 3D flag on upload |
 | Cinema / DCP | Discrete L+R streams, finish in Resolve, 3D DCP |
-| VR180 | Parallel rig + 180° fisheye/equirect per eye (renderer-side lens), platform-specific packing |
+| VR180 (YouTube etc.) | Parallel rig + per-eye 180 (`c4d_vr180_setup.py`), platform-specific packing |
 
 ## Troubleshooting (C4D side)
 

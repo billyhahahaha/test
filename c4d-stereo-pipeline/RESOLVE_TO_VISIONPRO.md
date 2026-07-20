@@ -144,9 +144,7 @@ renders.
 
 ---
 
-*Beyond spatial video: full 180° immersive (Apple Immersive Video, 8K
-per-eye fisheye at 90 fps) is a different mastering path — Resolve Studio 20
-added an immersive workflow for it alongside Blackmagic's URSA Cine Immersive.
-If the project graduates from a windowed spatial deliverable to full
-immersion, that's the next stop; the C4D side would move to 180° fisheye
-renders per eye.*
+*Beyond spatial video: for full 180° immersion — **Apple Immersive Video
+(`.aivu`)** and APMP VR180 — switch to `c4d_vr180_setup.py` on the C4D side
+and follow `APPLE_IMMERSIVE_180.md`. Different rules apply there (human-locked
+interaxial, parallel eyes, no convergence anywhere, 60–90 fps).*

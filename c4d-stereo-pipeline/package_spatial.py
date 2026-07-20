@@ -63,16 +63,22 @@ def build_commands(args):
             sbs,
         ])
 
-    cmds.append([
+    cmd = [
         "spatial", "make",
         "-i", sbs,
         "-f", "sbs",
         "-o", args.out,
         "--cdist", "%g" % (args.interaxial_cm * 10.0),      # mm baseline
-        "--hfov", "%.2f" % hfov_degrees(args.focal, args.sensor),
         "--hadjust", "%g" % args.hadjust,
         "--primary", "left",
-    ])
+    ]
+    if args.projection == "hequ":
+        # VR180 half-equirect (APMP, visionOS 26+): FOV is fixed at 180 by
+        # the projection itself — needs spatial CLI 2.x.
+        cmd += ["--projection", "hequ"]
+    else:
+        cmd += ["--hfov", "%.2f" % hfov_degrees(args.focal, args.sensor)]
+    cmds.append(cmd)
     return cmds
 
 
@@ -95,6 +101,10 @@ def main(argv=None):
     ap.add_argument("--hadjust", type=float, default=0.0,
                     help="horizontal disparity adjustment, fraction of width "
                          "(use only for parallel renders; default 0)")
+    ap.add_argument("--projection", choices=("rect", "hequ"), default="rect",
+                    help="rect = windowed spatial video (default); hequ = "
+                         "VR180 half-equirect immersive (APMP, visionOS 26+, "
+                         "spatial CLI 2.x — see APPLE_IMMERSIVE_180.md)")
     ap.add_argument("--run", action="store_true",
                     help="execute the commands instead of just printing them")
     args = ap.parse_args(argv)
