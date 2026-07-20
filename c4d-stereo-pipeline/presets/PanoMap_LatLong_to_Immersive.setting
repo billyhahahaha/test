@@ -1,0 +1,23 @@
+-- PanoMap_LatLong_to_Immersive.setting
+-- Drop-in scaffold for the equirect -> Apple Immersive reprojection node.
+--
+-- FIRST USE (once): drop this on one eye stream of an immersive Fusion comp,
+-- then in the Inspector set From/Input projection = LatLong and To/Output
+-- projection = Immersive (Resolve 20.1+ immersive workflow), and re-save the
+-- node over this file (right-click node > Settings > Save As...). Dropdown
+-- values are stored by the running Resolve version at save time — a hand-
+-- authored file can't guarantee them, which is why this ships as a scaffold.
+-- After that one save it is the permanent drop-in preset.
+--
+-- Full recipe: reference/Fusion_PanoMap_Immersive_Comp_Recipe.md
+
+{
+	Tools = ordered() {
+		PanoMap_LatLong_to_Immersive = PanoMap {
+			CtrlWZoom = false,
+			NameSet = true,
+			ViewInfo = OperatorInfo { Pos = { 0, 0 } },
+		},
+	},
+	ActiveTool = "PanoMap_LatLong_to_Immersive"
+}

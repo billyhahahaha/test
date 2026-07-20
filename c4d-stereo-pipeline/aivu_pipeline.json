@@ -1,0 +1,40 @@
+{
+  "_readme": "Single source of truth for the AIVU pipeline. c4d_aivu_template_builder.py and resolve_aivu.py both read this file, so every stage carries the same numbers. Edit per project; keys under resolve.settings/clip_attributes that are null get filled by `resolve_aivu.py discover --write` (Resolve's immersive setting keys are unpublished and version-specific — discovery beats guessing).",
+
+  "project": "Cadillac",
+  "shot_name": "Cadillac_stereo",
+
+  "fps": 90,
+  "per_eye": 4320,
+  "stereo_layout": "sbs",
+  "separation_cm": 6.4,
+
+  "c4d": {
+    "camera_name": "AIV_180_Stereo_Cam",
+    "render_setting_name": "AIV 180 Stereo SBS 8640x4320 @ 90fps",
+    "save_path": "renders/Cadillac/STEREO_EXR/Cadillac_stereo_"
+  },
+
+  "resolve": {
+    "project": "STERO TEST FOR VISION PRO CLAUDE",
+    "timeline": "CG_IMMERSIVE",
+    "render_preset_review": "AIVU_VisionPro_Review",
+    "render_preset_bundle": "AIVU_VisionPro_Bundle",
+    "deliver_dir": "masters",
+
+    "settings": {
+      "immersive_workflow_key": null,
+      "immersive_workflow_value": "Apple Immersive",
+      "extra": {
+        "timelineFrameRate": "90"
+      }
+    },
+
+    "clip_attributes": {
+      "stereo_mode_key": null,
+      "stereo_mode_value": "Side by Side",
+      "projection_key": null,
+      "projection_value": "Equirectangular 180"
+    }
+  }
+}

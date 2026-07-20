@@ -10,7 +10,15 @@ deliver MV-HEVC spatial video to Apple Vision Pro.
 | `c4d_export_setup.py` | 2 — render | Sets Render Settings + L/R Takes for the Resolve handoff (windowed spatial video) |
 | `c4d_vr180_setup.py` | 2-alt — render | Same, but for 180° immersive: square per-eye, spherical 180 cameras, forced-parallel rig |
 | `RESOLVE_TO_VISIONPRO.md` | 3 — finish & deliver | Resolve Studio stereo conform/grade + MV-HEVC spatial export, on-device QC |
-| `APPLE_IMMERSIVE_180.md` | 3-alt | **Apple Immersive Video** (`.aivu` + AIV Utility) and APMP VR180 delivery |
+| `APPLE_IMMERSIVE_180.md` | 3-alt | Immersive tiers overview + APMP VR180 delivery |
+| **`AIVU_MASTERING.md`** | 3-AIVU | **Genuine Apple Immersive Video (`.aivu`) — the full kit manual** |
+| `aivu_pipeline.json` | AIVU all | Single source of truth: resolution/fps/separation/names/keys for every AIVU stage |
+| `c4d_aivu_template_builder.py` | AIVU 1 | Builds the C4D template: RS Stereo Spherical camera + AIV render preset from the config |
+| `c4d_aivu_template_checker.py` | AIVU QC | Read-only ✓/⚠ audit of camera + render settings before you commit a render |
+| `resolve_aivu.py` | AIVU 3 | Resolve automation: `discover` this build's keys, `conform` import/attrs/timeline, `deliver` via saved Vision Pro presets |
+| `presets/` | AIVU | Fusion PanoMap LatLong→Immersive drop-in (`.setting`) |
+| `reference/` | AIVU | Verified pipeline spec, Fusion recipe, Resolve MCP audit (source docs) |
+| `SHOT_CHECKLIST.md` | AIVU | Per-shot run sheet, render → headset acceptance |
 | `package_spatial.py` | 3b | Scripted MV-HEVC packaging (ffmpeg + `spatial` CLI), metadata derived from rig numbers; `--projection hequ` for VR180 |
 | `resolve_auto_conform.py` | 3-auto | Drives Resolve Studio via its scripting API: conform, grade-mirror, render, package — see `RESOLVE_AUTOMATION.md` |
 | `RESOLVE_AUTOMATION.md` | 3-auto | Setup + usage for the Resolve automation (and what the API can't do) |
@@ -38,10 +46,15 @@ deliver MV-HEVC spatial video to Apple Vision Pro.
 
 - **Windowed spatial video** (stereo in a floating, scalable frame) — stages
   2–3 above. The default for shots, spots and review cuts.
-- **Full 180° immersion** (Apple Immersive Video `.aivu` / APMP VR180 — the
-  world wraps around the viewer, visionOS 26+) — swap stage 2 for
-  `c4d_vr180_setup.py` and stage 3 for `APPLE_IMMERSIVE_180.md`. Different
-  rules apply there: human-locked interaxial, parallel eyes, 60–90 fps.
+- **Full 180° immersion** (the world wraps around the viewer) — two tiers:
+  - **Genuine Apple Immersive Video (`.aivu`)** — the flagship. Config-driven
+    kit: `c4d_aivu_template_builder.py` (Redshift Stereo Spherical template)
+    → `resolve_aivu.py` (conform/deliver) → Apple Immersive Video Utility.
+    Manual: **`AIVU_MASTERING.md`**.
+  - **APMP VR180** (`hequ`) — the quick iteration/compat tier:
+    `c4d_vr180_setup.py` + `APPLE_IMMERSIVE_180.md`.
+  Different rules than windowed either way: human-locked interaxial,
+  parallel eyes, 90 fps target.
 
 ## The rig
 
@@ -135,7 +148,8 @@ interaxial for that screen.
 | --- | --- |
 | Dailies / review | Merged anaglyph renders (native path) or anaglyph out of Resolve; cheap red-cyan glasses |
 | **Apple Vision Pro (windowed)** | **MV-HEVC spatial video — full walkthrough in `RESOLVE_TO_VISIONPRO.md`** |
-| **Apple Vision Pro (immersive)** | **Apple Immersive Video `.aivu` or APMP VR180 — `APPLE_IMMERSIVE_180.md`** |
+| **Apple Vision Pro (immersive, flagship)** | **Genuine `.aivu` — `AIVU_MASTERING.md` + `SHOT_CHECKLIST.md`** |
+| Apple Vision Pro (immersive, quick tier) | APMP VR180 — `APPLE_IMMERSIVE_180.md` |
 | 3D TV / YouTube 3D | Side-by-side (full or half width) + 3D flag on upload |
 | Cinema / DCP | Discrete L+R streams, finish in Resolve, 3D DCP |
 | VR180 (YouTube etc.) | Parallel rig + per-eye 180 (`c4d_vr180_setup.py`), platform-specific packing |

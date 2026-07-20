@@ -6,14 +6,14 @@ wraps around the viewer**. On Vision Pro that comes in two tiers:
 
 | Tier | What it is | File | Playback |
 | --- | --- | --- | --- |
-| **Apple Immersive Video (AIV)** | Apple's flagship immersive format: 180° stereo, **fisheye** projection with embedded camera-calibration + venue metadata, 90 fps heritage (mastered up to 8160×7200 per eye on Blackmagic's URSA Cine Immersive) | **`.aivu`** — Apple Immersive Video Universal | visionOS 26+: Files/Quick Look, AVKit apps, and the **Apple Immersive Video Utility** |
+| **Apple Immersive Video (AIV)** | Apple's flagship immersive format: 180° stereo, **parametric fisheye (`prim`) driven by ILPD lens-calibration metadata**, 90 fps (mastered up to 8160×7200 per eye on Blackmagic's URSA Cine Immersive). NOT plain fisheye or equirect — the headset reprojects from the lens metadata | **`.aivu`** — Apple Immersive Video Universal | visionOS 26+: Files/Quick Look, AVKit apps, and the **Apple Immersive Video Utility** |
 | **APMP** (Apple Projected Media Profile) | The pragmatic tier: standard MV-HEVC tagged with a projection (VR180 half-equirect, 360, wide-FOV) — no special camera metadata needed | `.mov` (MV-HEVC + APMP signaling) | visionOS 26+: Files/Quick Look, Safari, AVKit apps |
 
-**For CG out of Cinema 4D, deliver APMP VR180 first.** It's dramatically
-simpler, plays natively across visionOS 26, and needs no calibration story —
-your render *is* the ideal camera. Master to `.aivu` when the project needs
-the Apple Immersive branding tier or the Utility's multi-headset review
-workflow.
+**This doc covers the APMP VR180 tier** — the fast, simple flavour for
+iteration and platforms beyond Apple. **Genuine AIVU mastering has its own
+full kit and manual: `AIVU_MASTERING.md`** (config-driven C4D/Redshift
+template → Resolve 20.1+ PanoMap reprojection → Vision Pro Review/Bundle
+delivery → Apple Immersive Video Utility).
 
 Both tiers require **visionOS 26**; earlier visionOS only plays windowed
 spatial video.
@@ -39,10 +39,12 @@ Run **`c4d_vr180_setup.py`** (after the rig script). It:
 **Renderer notes**
 
 - **Redshift / Octane / Arnold**: the native spherical camera is ignored —
-  set the renderer's own lens on each eye camera instead: RS camera lens
-  **Fisheye 180°** (matches AIV's native projection) or **Spherical** with
-  the same lat/long limits (half-equirect, matches APMP VR180). Keep the
-  projection consistent across both eyes and the whole show.
+  use the renderer's own lens. For VR180, a spherical lens clamped to the
+  same lat/long limits per eye camera (half-equirect). Note Redshift has
+  **no stereo fisheye**: for the genuine-AIVU path you use one RS **Stereo
+  Spherical** camera (both eyes, equirect) and reproject in Resolve — the
+  template builder in `AIVU_MASTERING.md` sets that up. Keep the projection
+  consistent across both eyes and the whole show.
 - Simple twin parallel spherical cameras are the standard CG VR180 approach:
   stereo is exact at the view centre and softens toward the edges — fine for
   front-facing content. If your renderer offers **ODS / omnidirectional
@@ -98,14 +100,12 @@ re-signaling existing VR180 files (Canon EOS VR etc.).
 
 ### Route 2 — `.aivu` (Apple Immersive Video Universal)
 
-- **Resolve Studio 20 on Apple Silicon**: the Apple Immersive delivery added
-  with the URSA workflow renders `.aivu` directly from an immersive timeline
-  — check the Deliver page presets in your build; fisheye mastering is the
-  native AIV projection.
-- **Apple's developer route**: the `ImmersiveMediaSupport` framework
-  (macOS 26 / visionOS 26) authors AIVU programmatically — Apple ships
-  sample code for writing venue/calibration metadata. This is the path for
-  bespoke pipelines and perfectly-parametrised CG "cameras".
+Genuine AIVU is its own pipeline with its own kit — **`AIVU_MASTERING.md`**:
+`aivu_pipeline.json` (shared numbers) → `c4d_aivu_template_builder.py`
+(RS Stereo Spherical template) → `resolve_aivu.py` (conform/deliver via the
+saved Vision Pro presets) → Apple Immersive Video Utility acceptance. Don't
+try to reach `.aivu` by re-tagging this route's files — the parametric
+projection + ILPD only come from the Resolve immersive delivery.
 
 ### Route 3 — quick review compromise
 
