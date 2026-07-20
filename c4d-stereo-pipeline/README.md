@@ -16,6 +16,8 @@ deliver MV-HEVC spatial video to Apple Vision Pro.
 | `c4d_aivu_template_builder.py` | AIVU 1 | Builds the C4D template: RS Stereo Spherical camera + AIV render preset from the config |
 | `c4d_aivu_template_checker.py` | AIVU QC | Read-only ✓/⚠ audit of camera + render settings before you commit a render |
 | `resolve_aivu.py` | AIVU 3 | Resolve automation: `discover` this build's keys, `conform` import/attrs/timeline, `deliver` via saved Vision Pro presets |
+| `resolve_mcp_server.py` | AIVU 3 | **MCP server** — Claude drives Resolve directly (immersive-aware tools, gated exec) — `RESOLVE_MCP.md` |
+| `RESOLVE_MCP.md` | AIVU 3 | Server setup/registration, tool catalog, safety model |
 | `presets/` | AIVU | Fusion PanoMap LatLong→Immersive drop-in (`.setting`) |
 | `reference/` | AIVU | Verified pipeline spec, Fusion recipe, Resolve MCP audit (source docs) |
 | `SHOT_CHECKLIST.md` | AIVU | Per-shot run sheet, render → headset acceptance |

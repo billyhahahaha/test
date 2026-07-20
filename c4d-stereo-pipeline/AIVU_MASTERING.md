@@ -102,7 +102,8 @@ the PanoMap comp and Deliver presets are UI-built once. The `discover`
 subcommand exists because Resolve's immersive setting keys are unpublished —
 it dumps and learns your build's real keys instead of guessing, and
 `--write` stores them in `aivu_pipeline.json` so conform is fully automatic
-from then on. If you later wire this into a Resolve MCP server, the same
-config + discovered keys are exactly what its missing
-`set_project_setting` / `set_clip_property` / `load_render_preset` tools
-should call.
+from then on. The same pipeline is also exposed as an **MCP server** —
+`resolve_mcp_server.py` (see `RESOLVE_MCP.md`) — so Claude can drive
+conform/deliver conversationally through typed tools
+(`set_project_setting` / `set_clip_property` / `load_render_preset` /
+`configure_immersive_workflow`) that read this same config.
