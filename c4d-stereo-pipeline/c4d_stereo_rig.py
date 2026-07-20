@@ -1,15 +1,18 @@
-"""Divini — stereoscopic camera rig builder for Cinema 4D.
+"""Stereoscopic camera rig builder for Cinema 4D.
+
+Stage 1 of the C4D -> DaVinci Resolve Studio -> Apple Vision Pro pipeline
+(see README.md; stage 2 is c4d_export_setup.py).
 
 Run this from inside Cinema 4D:
-    Extensions > Script Manager > File > Open... > divini_stereo_rig.py > Execute
+    Extensions > Script Manager > File > Open... > c4d_stereo_rig.py > Execute
 (or paste the whole file into the Script Manager and hit Execute).
 
 It creates one rig in the active document:
 
-    CAM_Divini_Stereo        <- MASTER camera. Animate this one. Stereo controls
+    CAM_Stereo               <- MASTER camera. Animate this one. Stereo controls
       |                         live in its User Data tab.
-      +- CAM_Divini_Stereo_L <- left eye  (driven by the Python tag — hands off)
-      +- CAM_Divini_Stereo_R <- right eye (driven by the Python tag — hands off)
+      +- CAM_Stereo_L        <- left eye  (driven by the Python tag — hands off)
+      +- CAM_Stereo_R        <- right eye (driven by the Python tag — hands off)
 
 Two ways to render it (details in README.md):
 
@@ -19,8 +22,9 @@ Two ways to render it (details in README.md):
      exposes those settings. Render through the master camera.
 
   B. Renderer-agnostic (Redshift / Octane / Arnold / ...)
-     Render the _L and _R cameras as two passes (Takes work well). The Python
-     tag keeps them locked to the master with correct OFF-AXIS (film-shift)
+     Render the _L and _R cameras as two passes. Run c4d_export_setup.py to
+     build the L/R Takes and output settings automatically. The Python tag
+     keeps the eyes locked to the master with correct OFF-AXIS (film-shift)
      convergence — parallel optical axes, no toe-in, no keystone, no vertical
      parallax.
 
@@ -33,8 +37,9 @@ Stereo controls (User Data on the master camera):
                           1/30th of it.
   Off-Axis Convergence    ON  = converge via horizontal film shift (recommended
                                 for screen/TV/cinema delivery).
-                          OFF = parallel rig, zero shift (VR180 / Apple spatial
-                                video — converge later in post with HIT).
+                          OFF = parallel rig, zero shift (Vision Pro spatial /
+                                VR180 — converge later in Resolve or at
+                                MV-HEVC packaging time).
   Swap Eyes               Flip L/R if your pipeline expects the other order.
 
 The math (off-axis / film-shift stereo):
@@ -55,7 +60,7 @@ the manual L/R rig always works.
 
 import c4d
 
-RIG_NAME = "CAM_Divini_Stereo"
+RIG_NAME = "CAM_Stereo"
 
 DEFAULT_INTERAXIAL = 6.5        # scene units (cm in a default document) — human interocular
 DEFAULT_ZERO_PARALLAX = 200.0   # scene units; ~30x the interaxial ("1/30 rule")
@@ -67,10 +72,10 @@ DEFAULT_APERTURE = 36.0         # mm sensor width
 # ---------------------------------------------------------------------------
 TAG_CODE = r"""import c4d
 
-# Divini stereo driver — lives on the master camera. Positions the L/R eye
-# cameras, syncs their lenses to the master, and applies off-axis convergence
-# as a horizontal film shift. Edit the User Data on the master camera, not
-# the eye cameras.
+# Stereo driver — lives on the master camera. Positions the L/R eye cameras,
+# syncs their lenses to the master, and applies off-axis convergence as a
+# horizontal film shift. Edit the User Data on the master camera, not the
+# eye cameras.
 
 def _find_eyes(cam):
     left = right = None
@@ -226,7 +231,7 @@ def build_rig(doc):
     _add_stereo_userdata(master)
 
     tag = c4d.BaseTag(c4d.Tpython)
-    tag.SetName("Divini Stereo Driver")
+    tag.SetName("Stereo Driver")
     tag[c4d.TPYTHON_CODE] = TAG_CODE
     master.InsertTag(tag)
 
@@ -260,7 +265,7 @@ def main():
     c4d.EventAdd()
 
     lines = [
-        "Divini stereo rig created.",
+        "Stereo rig created.",
         "",
         "Animate '%s' — stereo controls are in its User Data tab." % RIG_NAME,
     ]
@@ -275,8 +280,8 @@ def main():
             "render the _L/_R cameras as two passes (see README.md)."
         )
     lines.append(
-        "Third-party renderers (Redshift/Octane/...): render the _L and _R "
-        "cameras via Takes."
+        "Next: run c4d_export_setup.py to build the L/R render Takes for the "
+        "DaVinci Resolve handoff."
     )
     print("\n".join(lines))
     c4d.gui.MessageDialog("\n".join(lines))

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Divini — stereoscopic depth-budget calculator (plain Python, no C4D needed).
+"""Stereoscopic depth-budget calculator (plain Python, no C4D needed).
 
 Feed it your rig numbers and it tells you, for any object distance, how much
 screen parallax you will get on the delivery screen — plus warnings when you
@@ -15,17 +15,18 @@ Uses the same off-axis model as the C4D rig, so the numbers match renders:
     negative  -> crossed parallax, object pops OUT of the screen
 
 Examples:
-    python3 divini_parallax_calc.py
-    python3 divini_parallax_calc.py --interaxial 6.5 --zero-parallax 200 \
+    python3 stereo_parallax_calc.py
+    python3 stereo_parallax_calc.py --interaxial 6.5 --zero-parallax 200 \
         --focal 36 --sensor 36 --screen-width 1440 --distances 80 150 200 400 inf
-    python3 divini_parallax_calc.py --screen-width 9000   # cinema screen, 9 m
+    python3 stereo_parallax_calc.py --screen-width 9000   # cinema screen, 9 m
 
 Notes:
     * interaxial, zero-parallax and distances are in SCENE units (any unit,
       as long as they are all the same — cm in a default C4D document).
     * focal and sensor width are in mm (as shown on the C4D camera).
     * screen width is the physical delivery screen width in mm
-      (65" 16:9 TV ~ 1440 mm, small cinema ~ 9000 mm).
+      (65" 16:9 TV ~ 1440 mm, small cinema ~ 9000 mm). For Vision Pro
+      spatial video, budget for the default virtual window (~2-3 m wide).
 """
 
 import argparse
@@ -49,7 +50,7 @@ def fmt_dist(d):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(
-        description="Stereo depth-budget calculator for the Divini C4D rig."
+        description="Stereo depth-budget calculator for the C4D stereo rig."
     )
     ap.add_argument("--interaxial", type=float, default=6.5,
                     help="eye separation, scene units (default 6.5)")
@@ -77,7 +78,7 @@ def main(argv=None):
     else:
         distances = [z0 * 0.5, z0, z0 * 2.0, z0 * 4.0, float("inf")]
 
-    print("Divini stereo depth budget")
+    print("Stereo depth budget")
     print("  interaxial %g | zero parallax %g | focal %gmm | sensor %gmm | screen %gmm wide"
           % (t, z0, f, w, sw))
     print("  ratio check: interaxial is 1/%.0f of zero parallax (aim for ~1/30)" % (z0 / t))
