@@ -41,6 +41,11 @@ Convergence policy (decide once, per project):
   Resolve convergence and `--hadjust` at zero. Converging twice compounds
   disparity and breaks the depth budget.
 
+> **Automation:** `resolve_auto_conform.py` scripts §2–§3 (project, import,
+> timelines), mirrors grades between eyes, renders the masters and runs the
+> Route C packaging — everything below except the grade and the native
+> stereo-clip pairing. See `RESOLVE_AUTOMATION.md`.
+
 ## 2 · Resolve Studio project setup
 
 1. New project; timeline = **per-eye** resolution and fps (3840×2160 @ your fps).

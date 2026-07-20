@@ -12,6 +12,8 @@ deliver MV-HEVC spatial video to Apple Vision Pro.
 | `RESOLVE_TO_VISIONPRO.md` | 3 — finish & deliver | Resolve Studio stereo conform/grade + MV-HEVC spatial export, on-device QC |
 | `APPLE_IMMERSIVE_180.md` | 3-alt | **Apple Immersive Video** (`.aivu` + AIV Utility) and APMP VR180 delivery |
 | `package_spatial.py` | 3b | Scripted MV-HEVC packaging (ffmpeg + `spatial` CLI), metadata derived from rig numbers; `--projection hequ` for VR180 |
+| `resolve_auto_conform.py` | 3-auto | Drives Resolve Studio via its scripting API: conform, grade-mirror, render, package — see `RESOLVE_AUTOMATION.md` |
+| `RESOLVE_AUTOMATION.md` | 3-auto | Setup + usage for the Resolve automation (and what the API can't do) |
 | `stereo_parallax_calc.py` | any | Depth-budget calculator — on-screen parallax + comfort warnings |
 
 ---
@@ -28,6 +30,9 @@ deliver MV-HEVC spatial video to Apple Vision Pro.
 3. **Finish & deliver** — Follow `RESOLVE_TO_VISIONPRO.md`: conform the pair to
    a stereo clip in Resolve Studio, grade linked, then export MV-HEVC (native,
    Compressor, or `package_spatial.py`) and AirDrop to the headset.
+   Or let `resolve_auto_conform.py` do everything except the grade itself —
+   conform, grade-mirror, master renders and spatial packaging are one
+   command each (`RESOLVE_AUTOMATION.md`).
 
 **Which Vision Pro deliverable?** Two forks after stage 1:
 
