@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#07090c" />
+  <meta name="description" content="Stereoscopic footage player and QC tool for the web — WebXR Layers, anaglyph, free-view, disparity analysis and alignment measurement." />
+  <title>Stereo Bench · stereoscopic footage on the web</title>
+  <link rel="icon" type="image/png" href="/favicon.png" />
+  <link rel="stylesheet" href="./stereo.css?v=1" />
+</head>
+<body>
+  <div class="shell">
+
+    <!-- ============ stage ============ -->
+    <section class="stage" id="stage">
+      <canvas id="gl"></canvas>
+
+      <div class="stage-top">
+        <div class="mark"><span class="dot"></span> STEREO BENCH</div>
+        <div class="badges" id="badges"></div>
+      </div>
+
+      <div class="stage-hud" id="hud" hidden>
+        <div class="hud-row"><span>depth budget</span><b id="hud-budget">—</b></div>
+        <div class="hud-row"><span>near / far</span><b id="hud-nearfar">—</b></div>
+        <div class="hud-row"><span>vertical error</span><b id="hud-vert">—</b></div>
+        <div class="hud-row"><span>roll error</span><b id="hud-roll">—</b></div>
+      </div>
+
+      <div class="stage-msg" id="msg" hidden></div>
+
+      <div class="transport" id="transport">
+        <button class="tbtn" id="btn-play" title="Play / pause (space)" aria-label="Play or pause">
+          <svg viewBox="0 0 24 24" id="ic-play"><path d="M8 5l11 7-11 7z"/></svg>
+        </button>
+        <input type="range" id="scrub" min="0" max="1000" value="0" step="1" aria-label="Scrub" />
+        <span class="time" id="time">0:00 / 0:00</span>
+        <button class="tbtn ghost" id="btn-loop" title="Loop" aria-label="Loop" aria-pressed="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 2l3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h12"/><path d="M7 22l-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/></svg>
+        </button>
+        <button class="tbtn ghost" id="btn-mute" title="Mute" aria-label="Mute" aria-pressed="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 9l4 6M21 9l-4 6"/></svg>
+        </button>
+        <button class="tbtn ghost" id="btn-full" title="Fullscreen (f)" aria-label="Fullscreen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg>
+        </button>
+        <button class="tbtn xr" id="btn-xr" hidden>Enter VR</button>
+      </div>
+
+      <div class="drop" id="drop" hidden><div>Drop a stereo clip or image pair</div></div>
+    </section>
+
+    <!-- ============ panel ============ -->
+    <aside class="panel" id="panel">
+
+      <div class="grp">
+        <h2>Source</h2>
+        <div class="row wrap">
+          <button class="chip on" data-src="test" id="src-test">Calibration card</button>
+          <button class="chip" id="src-file">Open file…</button>
+          <button class="chip" id="src-url">From URL…</button>
+        </div>
+        <input type="file" id="file" accept="video/*,image/*" hidden />
+        <p class="meta" id="src-meta">Procedural stereo card — every plaque is labelled with its true screen parallax, so you can verify the whole chain end to end.</p>
+      </div>
+
+      <div class="grp" id="grp-inject">
+        <h2>Inject error <span class="hint">calibration card only</span></h2>
+        <label class="slider">
+          <span>Vertical<b id="v-injv">0.00%</b></span>
+          <input type="range" id="inj-v" min="-150" max="150" value="0" step="1" />
+        </label>
+        <label class="slider">
+          <span>Roll<b id="v-injr">0.00°</b></span>
+          <input type="range" id="inj-r" min="-100" max="100" value="0" step="1" />
+        </label>
+        <p class="meta">Dial a known fault in, then check the analysis panel reports it back. That is the test for the measurement, not for the footage.</p>
+      </div>
+
+      <div class="grp">
+        <h2>Frame layout</h2>
+        <div class="seg" id="seg-layout" role="group">
+          <button data-v="auto" class="on">Auto</button>
+          <button data-v="sbs">Side&#8209;by&#8209;side</button>
+          <button data-v="tb">Over/under</button>
+          <button data-v="mono">Mono</button>
+        </div>
+        <div class="row wrap">
+          <button class="chip toggle" id="btn-swap">Swap eyes</button>
+          <select id="sel-aspect" class="sel" aria-label="Per-eye aspect">
+            <option value="auto">Per-eye aspect: auto</option>
+            <option value="native">Native (no squeeze)</option>
+            <option value="1.7778">16:9</option>
+            <option value="1.8519">1.85:1</option>
+            <option value="2.39">2.39:1</option>
+            <option value="1">1:1 (VR180 fisheye)</option>
+          </select>
+        </div>
+        <div class="seg small" id="seg-proj" role="group">
+          <button data-v="flat" class="on">Flat</button>
+          <button data-v="vr180">VR180</button>
+          <button data-v="vr360">360</button>
+        </div>
+      </div>
+
+      <div class="grp">
+        <h2>View</h2>
+        <div class="modes" id="modes"></div>
+      </div>
+
+      <div class="grp">
+        <h2>Alignment <button class="mini" id="btn-auto">Auto-align</button><button class="mini ghost" id="btn-reset">Reset</button></h2>
+        <label class="slider">
+          <span>Convergence<b id="v-conv">0.00%</b></span>
+          <input type="range" id="s-conv" min="-400" max="400" value="0" step="1" />
+        </label>
+        <label class="slider">
+          <span>Vertical trim<b id="v-vert">0.00%</b></span>
+          <input type="range" id="s-vert" min="-150" max="150" value="0" step="1" />
+        </label>
+        <label class="slider">
+          <span>Roll trim<b id="v-roll">0.00°</b></span>
+          <input type="range" id="s-roll" min="-100" max="100" value="0" step="1" />
+        </label>
+        <p class="meta">Convergence is horizontal image translation: positive pushes the scene behind the screen. Vertical and roll are rig faults — fix them, don't live with them.</p>
+      </div>
+
+      <div class="grp">
+        <h2>Analysis <button class="mini ghost toggle on" id="btn-hud">HUD</button></h2>
+        <div class="readout" id="readout"><div class="ro-empty">Waiting for frames…</div></div>
+        <label class="slider">
+          <span>Search range<b id="v-range">6.0%</b></span>
+          <input type="range" id="s-range" min="10" max="120" value="60" step="1" />
+        </label>
+        <p class="meta">Disparity is estimated live on the GPU at low resolution — good enough to read the depth budget and drive parallax, not a substitute for a proper offline solve.</p>
+      </div>
+
+      <div class="grp" id="grp-parallax">
+        <h2>Depth parallax</h2>
+        <label class="slider">
+          <span>Strength<b id="v-pstr">1.00×</b></span>
+          <input type="range" id="s-pstr" min="0" max="300" value="100" step="1" />
+        </label>
+        <div class="row wrap">
+          <button class="chip toggle on" id="btn-gyro">Pointer / gyro</button>
+        </div>
+        <p class="meta">The flat-screen payoff: no glasses, no headset, depth still reads. Occlusion holes are stretched, not filled.</p>
+      </div>
+
+      <div class="grp">
+        <h2>Cardboard optics</h2>
+        <label class="slider">
+          <span>Distortion k1<b id="v-k1">0.22</b></span>
+          <input type="range" id="s-k1" min="0" max="60" value="22" step="1" />
+        </label>
+        <label class="slider">
+          <span>Lens separation<b id="v-lens">0.00</b></span>
+          <input type="range" id="s-lens" min="-120" max="120" value="0" step="1" />
+        </label>
+      </div>
+
+      <details class="grp notes">
+        <summary>Format notes &amp; conversion recipes</summary>
+        <p><b>MV-HEVC / Apple spatial video</b> decodes here as its base (left) view only — browsers expose no second-view API outside an immersive context. Convert to side-by-side for cross-browser stereo.</p>
+        <pre><code># spatial .MOV -> full side-by-side
+ffmpeg -i spatial.MOV -filter_complex \
+  "[0:v:0][0:v:1]hstack=inputs=2" \
+  -c:v libx264 -crf 18 -pix_fmt yuv420p sbs.mp4
+
+# full SBS -> half SBS (same pixel budget, squeezed)
+ffmpeg -i sbs.mp4 -vf "scale=iw/2:ih" -c:v libx264 -crf 18 half_sbs.mp4</code></pre>
+        <p><b>Keyboard</b> — <kbd>space</kbd> play · <kbd>1…9</kbd> view mode · <kbd>[</kbd> <kbd>]</kbd> convergence · <kbd>s</kbd> swap eyes · <kbd>a</kbd> auto-align · <kbd>f</kbd> fullscreen.</p>
+      </details>
+
+      <p class="foot">Prototype · WebGL2 + WebXR Layers · everything stays on device</p>
+    </aside>
+  </div>
+
+  <script type="module" src="./src/main.js?v=1"></script>
+</body>
+</html>

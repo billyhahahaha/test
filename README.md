@@ -68,6 +68,13 @@ public/
 vercel.json     static deploy config (no build step)
 ```
 
+## Also in this repo
+
+`public/stereo/` is an unrelated second static app — **Stereo Bench**, a
+stereoscopic footage player and QC tool (WebXR Layers, anaglyph, free-view,
+depth-budget and alignment measurement). It shares nothing with the green guide
+but the static host, and deploys at `/stereo/`. See [STEREO.md](STEREO.md).
+
 ## Deploy
 
 Fully static — the contents of `public/` deploy to any static host. `vercel.json`
