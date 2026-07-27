@@ -69,6 +69,7 @@ export function displayEyeAspect(state) {
 
   if (projection === "vr360") return 2;
   if (projection === "vr180") return 1;
+  if (projection === "fisheye") return native;   // sample the raw plate as shot
   // Half-width SBS / half-height OU are stored squeezed; un-squeeze to 16:9.
   if (layout !== "mono" && native < 1.25) return 16 / 9;
   return native;

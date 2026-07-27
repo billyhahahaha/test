@@ -2,7 +2,7 @@
 
 import { program, draw, bindTex } from "./gl.js";
 import { COMPOSITE } from "./shaders.js";
-import { setEyeUniforms } from "./eye.js";
+import { setEyeUniforms, setProjectionUniforms } from "./eye.js";
 import { panelsFor } from "./formats.js";
 
 export function createRenderer(gl) {
@@ -16,6 +16,10 @@ export function createRenderer(gl) {
     gl.useProgram(p);
 
     setEyeUniforms(gl, p, state, srcTex, 0);
+    setProjectionUniforms(gl, p, state);
+    gl.uniform1i(p.u("u_preview"), state.preview ? 1 : 0);
+    gl.uniform2f(p.u("u_look"), state.lookYaw, state.lookPitch);
+    gl.uniform1f(p.u("u_previewFov"), state.previewFov);
     bindTex(gl, 1, dispTex);
     gl.uniform1i(p.u("u_disp"), 1);
 

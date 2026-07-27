@@ -6,7 +6,7 @@ import { createAnalysis } from "./analysis.js";
 import { createTestCard } from "./testcard.js";
 import { createXR, xrSupported } from "./xr.js";
 import {
-  MODE, MODE_LIST, guessLayout, displayEyeAspect, needsDisparity,
+  MODE, MODE_LIST, guessLayout, displayEyeAspect, nativeEyeAspect, needsDisparity,
 } from "./formats.js";
 
 const $ = (id) => document.getElementById(id);
@@ -23,6 +23,16 @@ const els = {
 
 const state = {
   layoutMode: "auto",
+  // projection
+  lensModel: 1,                    // equisolid — what most VR180 rigs record
+  fovHalf: (190 / 2) * Math.PI / 180,
+  circleX: 0.5, circleY: 0.5, radius: 0.5,
+  eqVert: Math.PI / 2,
+  yaw: 0,
+  plateAspect: 16 / 9,
+  preview: false,
+  lookYaw: 0, lookPitch: 0,
+  previewFov: 90 * Math.PI / 180,
   layout: "sbs",
   projection: "flat",
   aspectMode: "auto",
@@ -206,6 +216,7 @@ function applyLayout() {
     ? (source && source.layoutHint ? source.layoutHint : guessLayout(w, h, source ? source.name || "" : ""))
     : state.layoutMode;
   state.eyeAspect = displayEyeAspect(state);
+  state.plateAspect = nativeEyeAspect(state.layout, w, h);
   analysis.reset();
   updateBadges();
 }
@@ -341,7 +352,10 @@ function updateBadges() {
   const bits = [];
   if (state.srcW) bits.push(`<span class="badge">${state.srcW}×${state.srcH}</span>`);
   bits.push(`<span class="badge hot">${state.layout.toUpperCase()}</span>`);
-  if (state.projection !== "flat") bits.push(`<span class="badge">${state.projection.toUpperCase()}</span>`);
+  if (state.projection !== "flat") {
+    bits.push(`<span class="badge">${state.projection.toUpperCase()}</span>`);
+    if (state.preview) bits.push('<span class="badge hot">PREVIEW</span>');
+  }
   bits.push(`<span class="badge">eye ${state.eyeAspect.toFixed(2)}:1</span>`);
   if (state.swap) bits.push('<span class="badge warn">EYES SWAPPED</span>');
   if (xrPath) bits.push(`<span class="badge ${xrPath === "layers" ? "hot" : "warn"}">XR · ${xrPath === "layers" ? "compositor layer" : "webgl fallback"}</span>`);
@@ -436,7 +450,28 @@ function wireUI() {
 
   /* layout */
   seg("seg-layout", (v) => { state.layoutMode = v; applyLayout(); });
-  seg("seg-proj", (v) => { state.projection = v; state.eyeAspect = displayEyeAspect(state); updateBadges(); });
+  seg("seg-proj", (v) => {
+    state.projection = v;
+    state.eyeAspect = displayEyeAspect(state);
+    $("grp-fisheye").hidden = v !== "fisheye";
+    $("grp-equirect").hidden = v !== "vr180" && v !== "vr360";
+    if (v !== "flat" && !state.preview) showMsg(
+      "Turn on <b>Preview</b> to check this projection without a headset — drag to look around.", 4500);
+    updateBadges();
+  });
+
+  toggle($("btn-preview"), false, (on) => {
+    state.preview = on;
+    if (on) { state.lookYaw = 0; state.lookPitch = 0; }
+    updateBadges();
+  });
+  $("sel-lens").addEventListener("change", (e) => { state.lensModel = +e.target.value; });
+  slider("s-fov", "v-fov", (v) => { state.fovHalf = (v / 2) * Math.PI / 180; }, (v) => v + "°");
+  slider("s-rad", "v-rad", (v) => { state.radius = v / 1000; }, (v) => (v / 1000).toFixed(3));
+  slider("s-cx", "v-cx", (v) => { state.circleX = v / 1000; }, (v) => (v / 1000).toFixed(3));
+  slider("s-cy", "v-cy", (v) => { state.circleY = v / 1000; }, (v) => (v / 1000).toFixed(3));
+  slider("s-eqv", "v-eqv", (v) => { state.eqVert = (v / 2) * Math.PI / 180; }, (v) => v + "°");
+  slider("s-yaw", "v-yaw", (v) => { state.yaw = v * Math.PI / 180; }, (v) => v + "°");
   $("sel-aspect").addEventListener("change", (e) => {
     state.aspectMode = e.target.value;
     state.eyeAspect = displayEyeAspect(state);
@@ -497,7 +532,20 @@ function wireUI() {
   });
 
   /* input */
+  let drag = null;
+  els.stage.addEventListener("pointerdown", (e) => {
+    if (!state.preview || state.projection === "flat") return;
+    drag = { x: e.clientX, y: e.clientY, yaw: state.lookYaw, pitch: state.lookPitch };
+    els.stage.setPointerCapture(e.pointerId);
+  });
+  els.stage.addEventListener("pointerup", () => { drag = null; });
   els.stage.addEventListener("pointermove", (e) => {
+    if (drag) {
+      const k = state.previewFov / els.stage.clientWidth;
+      state.lookYaw = drag.yaw + (e.clientX - drag.x) * k;
+      state.lookPitch = Math.max(-1.5, Math.min(1.5, drag.pitch + (e.clientY - drag.y) * k));
+      return;
+    }
     const r = els.stage.getBoundingClientRect();
     setParallax(((e.clientX - r.left) / r.width) * 2 - 1, ((e.clientY - r.top) / r.height) * 2 - 1);
   });

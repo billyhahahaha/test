@@ -58,6 +58,62 @@ float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
 `;
 
 /* ---------------------------------------------------------------
+   Shared: direction -> eye-local uv.
+
+   This is the piece that decides whether footage looks right in a
+   headset. It is deliberately shared between the XR view and the
+   flat-screen preview so that what you tune at your desk is exactly
+   what the headset does — no second implementation to drift.
+
+   The fisheye branch exists because VR180 rigs (Canon RF 5.2mm dual,
+   Insta360, Kandao) record raw circular fisheye, not equirectangular.
+   Sampling that as equirect is the classic "nearly right": the centre
+   looks plausible and everything toward the edge bows and smears.
+   --------------------------------------------------------------- */
+const PROJECT = `
+uniform int   u_projection;   // 0 flat, 1 equirect180, 2 equirect360, 3 fisheye
+uniform int   u_lensModel;    // 0 equidistant, 1 equisolid, 2 stereographic, 3 orthographic
+uniform float u_fovHalf;      // fisheye half field of view, radians
+uniform vec2  u_circle;       // fisheye image-circle centre, eye-uv
+uniform float u_radius;       // fisheye image-circle radius, in eye-uv X
+uniform float u_eqVert;       // equirect vertical half-coverage, radians
+uniform float u_yaw;          // content yaw offset, radians
+uniform float u_plateAspect;  // TRUE pixel aspect of one eye, before any un-squeeze
+
+const float PI = 3.14159265359;
+
+/* Radial mapping r(theta) for each lens projection, un-normalised. */
+float lensR(float theta) {
+  if (u_lensModel == 1) return 2.0 * sin(theta * 0.5);              // equisolid
+  if (u_lensModel == 2) return 2.0 * tan(min(theta, 1.5533) * 0.5); // stereographic
+  if (u_lensModel == 3) return sin(theta);                          // orthographic
+  return theta;                                                     // equidistant
+}
+
+/* dir is a unit vector in the content's frame: -Z forward, +Y up.
+   Returns false where the ray falls outside the imaged area. */
+bool dirToUV(vec3 dir, out vec2 uv) {
+  if (u_projection == 3) {
+    float theta = acos(clamp(-dir.z, -1.0, 1.0));   // angle off the lens axis
+    if (theta > u_fovHalf) return false;
+    float r = lensR(theta) / max(lensR(u_fovHalf), 1e-6);
+    float phi = atan(dir.y, dir.x);
+    // The circle is round in PIXELS, so the uv-y radius picks up the aspect.
+    uv = u_circle + vec2(cos(phi), -sin(phi)) * (r * u_radius) * vec2(1.0, u_plateAspect);
+    return uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0;
+  }
+  float lon = atan(dir.x, -dir.z) + u_yaw;
+  float lat = asin(clamp(dir.y, -1.0, 1.0));
+  float span = (u_projection == 1) ? PI : 2.0 * PI;
+  uv = vec2(lon / span + 0.5, 0.5 - lat / (2.0 * max(u_eqVert, 1e-3)));
+  if (uv.y < 0.0 || uv.y > 1.0) return false;
+  if (u_projection == 1) return uv.x >= 0.0 && uv.x <= 1.0;
+  uv.x = fract(uv.x);
+  return true;
+}
+`;
+
+/* ---------------------------------------------------------------
    Reduce one eye to the analysis grid with a box filter.
 
    This step is not optional: matching straight against the full-res
@@ -96,8 +152,12 @@ ${MODE_DEFS}
 in vec2 v_uv;
 out vec4 o_col;
 ${EYE}
+${PROJECT}
 
 uniform sampler2D u_disp;
+uniform int   u_preview;       // 1 = reproject through u_projection for a flat look
+uniform vec2  u_look;          // preview camera yaw, pitch
+uniform float u_previewFov;    // preview camera horizontal FOV, radians
 uniform int   u_mode;
 uniform vec4  u_panel[2];
 uniform int   u_panelEye[2];
@@ -164,6 +224,22 @@ void main() {
   if (u_mode == M_CARDBOARD) {
     uv = barrel(uv, pi == 0 ? 1.0 : -1.0);
     if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) { o_col = vec4(0.0, 0.0, 0.0, 1.0); return; }
+  }
+
+  /* Preview: treat this panel as a pinhole camera you can look around with,
+     and run its rays through the same projection the headset will use. Lets
+     you get the mapping right without a headset on your face. */
+  if (u_preview == 1 && u_projection != 0) {
+    vec2 ndc = uv * 2.0 - 1.0;
+    float t = tan(u_previewFov * 0.5);
+    vec3 d = normalize(vec3(ndc.x * t, -ndc.y * t / u_panelAspect, -1.0));
+    float cp = cos(u_look.y), sp = sin(u_look.y);
+    d = vec3(d.x, d.y * cp - d.z * sp, d.y * sp + d.z * cp);          // pitch
+    float cy = cos(u_look.x), sy = sin(u_look.x);
+    d = vec3(d.x * cy + d.z * sy, d.y, -d.x * sy + d.z * cy);         // yaw
+    vec2 puv;
+    if (!dirToUV(normalize(d), puv)) { o_col = vec4(u_bg, 1.0); return; }
+    uv = puv;
   }
 
   vec3 c;
@@ -351,16 +427,14 @@ precision highp float;
 in vec2 v_uv;
 out vec4 o_col;
 ${EYE}
+${PROJECT}
 
 uniform int   u_xrEye;
 uniform vec4  u_proj;          // m0, m5, m8, m9 of the XR projection matrix
 uniform mat4  u_viewToWorld;
-uniform int   u_projection;    // 0 flat, 1 vr180, 2 vr360
 uniform float u_dist;
 uniform vec2  u_half;
 uniform vec3  u_bg;
-
-const float PI = 3.14159265359;
 
 void main() {
   vec2 ndc = vec2(v_uv.x, 1.0 - v_uv.y) * 2.0 - 1.0;
@@ -377,13 +451,9 @@ void main() {
     vec3 hit = org + dir * t;
     uv = vec2(hit.x / u_half.x, -hit.y / u_half.y) * 0.5 + 0.5;
     if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) { o_col = vec4(u_bg, 1.0); return; }
-  } else {
-    float lon = atan(dir.x, -dir.z);
-    float lat = asin(clamp(dir.y, -1.0, 1.0));
-    float span = (u_projection == 1) ? PI : 2.0 * PI;
-    uv = vec2(lon / span + 0.5, 0.5 - lat / PI);
-    if (u_projection == 1 && (uv.x < 0.0 || uv.x > 1.0)) { o_col = vec4(u_bg, 1.0); return; }
-    uv.x = fract(uv.x);
+  } else if (!dirToUV(dir, uv)) {
+    o_col = vec4(u_bg, 1.0);
+    return;
   }
   o_col = vec4(sampleEye(u_xrEye, uv).rgb, 1.0);
 }`;

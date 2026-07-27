@@ -97,10 +97,53 @@
             <option value="1">1:1 (VR180 fisheye)</option>
           </select>
         </div>
-        <div class="seg small" id="seg-proj" role="group">
+      </div>
+
+      <div class="grp">
+        <h2>Projection <button class="mini ghost toggle" id="btn-preview">Preview</button></h2>
+        <div class="seg" id="seg-proj" role="group">
           <button data-v="flat" class="on">Flat</button>
-          <button data-v="vr180">VR180</button>
-          <button data-v="vr360">360</button>
+          <button data-v="vr180">Equirect 180</button>
+          <button data-v="vr360">Equirect 360</button>
+          <button data-v="fisheye">Fisheye</button>
+        </div>
+        <p class="meta" id="proj-meta">Flat screen in space. Switch to Preview to look around a spherical or fisheye source on this screen — same maths the headset runs, so what you fix here is fixed there.</p>
+
+        <div id="grp-fisheye" hidden>
+          <select id="sel-lens" class="sel" aria-label="Lens model" style="width:100%;margin-bottom:9px">
+            <option value="1">Equisolid (most VR180 rigs)</option>
+            <option value="0">Equidistant</option>
+            <option value="2">Stereographic</option>
+            <option value="3">Orthographic</option>
+          </select>
+          <label class="slider">
+            <span>Field of view<b id="v-fov">190°</b></span>
+            <input type="range" id="s-fov" min="120" max="240" value="190" step="1" />
+          </label>
+          <label class="slider">
+            <span>Circle radius<b id="v-rad">0.500</b></span>
+            <input type="range" id="s-rad" min="200" max="800" value="500" step="1" />
+          </label>
+          <label class="slider">
+            <span>Centre X<b id="v-cx">0.500</b></span>
+            <input type="range" id="s-cx" min="200" max="800" value="500" step="1" />
+          </label>
+          <label class="slider">
+            <span>Centre Y<b id="v-cy">0.500</b></span>
+            <input type="range" id="s-cy" min="200" max="800" value="500" step="1" />
+          </label>
+          <p class="meta">Dual-fisheye rigs record circles, not equirect — sampling one as the other is the classic "looks nearly right, bows at the edges". Set the circle to the imaged disc, then trust straight lines in Preview.</p>
+        </div>
+
+        <div id="grp-equirect" hidden>
+          <label class="slider">
+            <span>Vertical coverage<b id="v-eqv">180°</b></span>
+            <input type="range" id="s-eqv" min="60" max="180" value="180" step="1" />
+          </label>
+          <label class="slider">
+            <span>Yaw offset<b id="v-yaw">0°</b></span>
+            <input type="range" id="s-yaw" min="-180" max="180" value="0" step="1" />
+          </label>
         </div>
       </div>
 

@@ -15,7 +15,7 @@
 
 import { program, draw } from "./gl.js";
 import { XR_VIEW } from "./shaders.js";
-import { setEyeUniforms } from "./eye.js";
+import { setEyeUniforms, setProjectionUniforms } from "./eye.js";
 
 const SCREEN_DIST = 2.2;      // metres to the virtual screen
 const SCREEN_HALF_W = 1.1;    // half-width, metres
@@ -79,7 +79,8 @@ export function createXR(gl, hooks) {
     const trims = trimsActive(state);
 
     let why = "";
-    if (!("XRMediaBinding" in window) || !hasLayers) why = "no Layers support";
+    if (state.projection === "fisheye") why = "fisheye has no WebXR layer type";
+    else if (!("XRMediaBinding" in window) || !hasLayers) why = "no Layers support";
     else if (!video || video.readyState < 2) why = "source isn't a decodable video";
     else if (trims) why = "alignment trims are active";
 
@@ -121,8 +122,7 @@ export function createXR(gl, hooks) {
 
     gl.useProgram(prog);
     setEyeUniforms(gl, prog, state, hooks.getTexture(), 0);
-    gl.uniform1i(prog.u("u_projection"),
-      state.projection === "vr360" ? 2 : state.projection === "vr180" ? 1 : 0);
+    setProjectionUniforms(gl, prog, state);
     gl.uniform1f(prog.u("u_dist"), SCREEN_DIST);
     gl.uniform2f(prog.u("u_half"), SCREEN_HALF_W, SCREEN_HALF_W / (state.eyeAspect || 16 / 9));
     gl.uniform3f(prog.u("u_bg"), 0.02, 0.028, 0.038);
