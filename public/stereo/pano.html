@@ -62,6 +62,18 @@
   button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
   svg { width: 15px; height: 15px; fill: currentColor; }
 
+  select {
+    flex: none;
+    border: 0;
+    border-radius: 8px;
+    padding: 7px 8px;
+    background: rgba(255, 255, 255, 0.14);
+    color: #fff;
+    font: 500 12px/1 inherit;
+    cursor: pointer;
+  }
+  select option { background: #16181c; }
+
   input[type=range] {
     flex: 1;
     height: 3px;
@@ -112,6 +124,15 @@
     <svg viewBox="0 0 24 24" id="icon"><path d="M8 5l11 7-11 7z"/></svg>
   </button>
   <input type="range" id="seek" min="0" max="1000" value="0" aria-label="Seek" />
+  <select id="lay" aria-label="Frame layout" title="How the eyes are packed">
+    <option value="sbs">Side-by-side</option>
+    <option value="tb">Over/under</option>
+    <option value="mono">Mono</option>
+  </select>
+  <select id="spn" aria-label="Coverage" title="How much of the sphere was filmed">
+    <option value="1">180&deg;</option>
+    <option value="2">360&deg;</option>
+  </select>
   <button id="full" aria-label="Fullscreen">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
       <path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg>
@@ -172,16 +193,14 @@ uniform int   u_layout;      // 0 mono, 1 side-by-side, 2 over/under
 uniform int   u_eye;
 uniform float u_span;        // 1.0 = 180 degrees, 2.0 = 360
 uniform vec2  u_look;        // yaw, pitch
-uniform float u_fov;
-uniform float u_aspect;      // canvas width / height
+uniform vec2  u_tan;         // half-extents of the image plane, x and y
 
 const float PI = 3.14159265359;
 
 void main() {
   // Treat the canvas as a pinhole camera and cast a ray per pixel.
   vec2 ndc = v_uv * 2.0 - 1.0;
-  float t = tan(u_fov * 0.5);
-  vec3 d = normalize(vec3(ndc.x * t, -ndc.y * t / u_aspect, -1.0));
+  vec3 d = normalize(vec3(ndc.x * u_tan.x, -ndc.y * u_tan.y, -1.0));
 
   float cp = cos(u_look.y), sp = sin(u_look.y);
   d = vec3(d.x, d.y * cp - d.z * sp, d.y * sp + d.z * cp);
@@ -362,6 +381,13 @@ canvas.addEventListener("click", () => { if (!moved) toggle(); moved = false; })
 seek.addEventListener("input", () => {
   if (video && video.duration) video.currentTime = (seek.value / 1000) * video.duration;
 });
+const lay = document.getElementById("lay");
+const spn = document.getElementById("spn");
+lay.value = cfg.layout;
+spn.value = String(cfg.span);
+lay.addEventListener("change", () => { cfg.layout = lay.value; });
+spn.addEventListener("change", () => { cfg.span = +spn.value; });
+
 document.getElementById("full").addEventListener("click", () =>
   document.fullscreenElement ? document.exitFullscreen() : document.body.requestFullscreen());
 
@@ -400,8 +426,15 @@ function frame() {
   gl.uniform1i(u("u_eye"), cfg.eye);
   gl.uniform1f(u("u_span"), cfg.span);
   gl.uniform2f(u("u_look"), yaw, pitch);
-  gl.uniform1f(u("u_fov"), fov);
-  gl.uniform1f(u("u_aspect"), canvas.width / canvas.height);
+  // Field of view is quoted for a 16:9 window. Hold the VERTICAL framing
+  // steady and let width follow the window, capped -- otherwise a short wide
+  // window silently pushes past 120 degrees, where rectilinear projection
+  // stretches the edges into mush. That reads as "warped footage" when it is
+  // really just too wide a virtual lens.
+  const aspect = canvas.width / canvas.height;
+  const tanV = Math.tan(fov * 0.5) / (16 / 9);
+  const tanH = Math.min(tanV * aspect, Math.tan(60 * Math.PI / 180));
+  gl.uniform2f(u("u_tan"), tanH, tanV);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 }
 requestAnimationFrame(frame);
