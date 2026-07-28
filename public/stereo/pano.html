@@ -129,10 +129,15 @@
     <option value="tb">Over/under</option>
     <option value="mono">Mono</option>
   </select>
-  <select id="spn" aria-label="Coverage" title="How much of the sphere was filmed">
-    <option value="1">180&deg;</option>
-    <option value="2">360&deg;</option>
+  <select id="spn" aria-label="Projection" title="How the sphere was flattened into the frame">
+    <option value="e1">Equirect 180&deg;</option>
+    <option value="e2">Equirect 360&deg;</option>
+    <option value="f">Fisheye</option>
   </select>
+  <label id="lensrow" hidden style="display:none;align-items:center;gap:7px;font-size:11px;color:rgba(255,255,255,.7)">
+    lens<input type="range" id="lens" min="120" max="230" value="180" step="1" style="flex:none;width:74px" />
+    <b id="lensval" style="font:11px ui-monospace,Menlo,monospace;min-width:34px">180&deg;</b>
+  </label>
   <button id="full" aria-label="Fullscreen">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
       <path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg>
@@ -163,6 +168,9 @@ const cfg = {
   layout: (q.get("layout") || "sbs").toLowerCase(),
   eye: (q.get("eye") || "left").toLowerCase() === "right" ? 1 : 0,
   span: q.get("span") === "360" ? 2 : 1,
+  proj: (q.get("proj") || "equirect").toLowerCase() === "fisheye" ? 1 : 0,
+  lensFov: (+q.get("lens") || 180) * Math.PI / 180,
+  radius: +q.get("radius") || 0.5,
   fov: (+q.get("fov") || 86) * Math.PI / 180,
   yaw: (+q.get("yaw") || 0) * Math.PI / 180,
 };
@@ -192,6 +200,9 @@ uniform sampler2D u_src;
 uniform int   u_layout;      // 0 mono, 1 side-by-side, 2 over/under
 uniform int   u_eye;
 uniform float u_span;        // 1.0 = 180 degrees, 2.0 = 360
+uniform int   u_proj;        // 0 equirect, 1 circular fisheye
+uniform float u_fovHalf;     // fisheye half field of view, radians
+uniform float u_radius;      // fisheye image-circle radius, in eye widths
 uniform vec2  u_look;        // yaw, pitch
 uniform vec2  u_tan;         // half-extents of the image plane, x and y
 
@@ -207,17 +218,31 @@ void main() {
   float cy = cos(u_look.x), sy = sin(u_look.x);
   d = normalize(vec3(d.x * cy + d.z * sy, d.y, -d.x * sy + d.z * cy));
 
-  // Ray -> equirectangular texture coordinate.
-  float lon = atan(d.x, -d.z);
-  float lat = asin(clamp(d.y, -1.0, 1.0));
-  vec2 uv = vec2(lon / (u_span * PI) + 0.5, 0.5 - lat / PI);
-
-  // Outside the filmed hemisphere there is nothing to show.
-  if (uv.y < 0.0 || uv.y > 1.0 || (u_span < 1.5 && (uv.x < 0.0 || uv.x > 1.0))) {
-    o = vec4(0.0, 0.0, 0.0, 1.0);
-    return;
+  vec2 uv;
+  if (u_proj == 1) {
+    // Circular fisheye: distance from the lens axis maps to radius, not to
+    // longitude. Sampling this as equirect is what squashes the frame.
+    float theta = acos(clamp(-d.z, -1.0, 1.0));
+    if (theta > u_fovHalf) { o = vec4(0.0, 0.0, 0.0, 1.0); return; }
+    // Equisolid, which is what immersive rigs record.
+    float r = sin(theta * 0.5) / max(sin(u_fovHalf * 0.5), 1e-5);
+    float phi = atan(d.y, d.x);
+    // The eye plate is square here, so the circle needs no aspect correction.
+    uv = vec2(0.5) + vec2(cos(phi), -sin(phi)) * (r * u_radius);
+    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+      o = vec4(0.0, 0.0, 0.0, 1.0);
+      return;
+    }
+  } else {
+    float lon = atan(d.x, -d.z);
+    float lat = asin(clamp(d.y, -1.0, 1.0));
+    uv = vec2(lon / (u_span * PI) + 0.5, 0.5 - lat / PI);
+    if (uv.y < 0.0 || uv.y > 1.0 || (u_span < 1.5 && (uv.x < 0.0 || uv.x > 1.0))) {
+      o = vec4(0.0, 0.0, 0.0, 1.0);
+      return;
+    }
+    uv.x = fract(uv.x);
   }
-  uv.x = fract(uv.x);
 
   // Pick this eye out of the packed frame.
   if (u_layout == 1) uv.x = uv.x * 0.5 + float(u_eye) * 0.5;
@@ -417,10 +442,33 @@ seek.addEventListener("input", () => {
 });
 const lay = document.getElementById("lay");
 const spn = document.getElementById("spn");
+const lensrow = document.getElementById("lensrow");
+const lens = document.getElementById("lens");
+const lensval = document.getElementById("lensval");
+
+function syncProj() {
+  spn.value = cfg.proj === 1 ? "f" : (cfg.span === 2 ? "e2" : "e1");
+  const fish = cfg.proj === 1;
+  lensrow.hidden = !fish;
+  lensrow.style.display = fish ? "flex" : "none";
+}
 lay.value = cfg.layout;
-spn.value = String(cfg.span);
+syncProj();
+lens.value = String(Math.round(cfg.lensFov * 180 / Math.PI));
+lensval.textContent = lens.value + "\u00b0";
+
 lay.addEventListener("change", () => { cfg.layout = lay.value; });
-spn.addEventListener("change", () => { cfg.span = +spn.value; });
+spn.addEventListener("change", () => {
+  const v = spn.value;
+  cfg.proj = v === "f" ? 1 : 0;
+  if (v === "e2") cfg.span = 2;
+  if (v === "e1") cfg.span = 1;
+  syncProj();
+});
+lens.addEventListener("input", () => {
+  cfg.lensFov = +lens.value * Math.PI / 180;
+  lensval.textContent = lens.value + "\u00b0";
+});
 
 document.getElementById("full").addEventListener("click", () =>
   document.fullscreenElement ? document.exitFullscreen() : document.body.requestFullscreen());
@@ -463,6 +511,9 @@ function frame() {
   gl.uniform1i(u("u_layout"), LAYOUTS[cfg.layout] ?? 1);
   gl.uniform1i(u("u_eye"), cfg.eye);
   gl.uniform1f(u("u_span"), cfg.span);
+  gl.uniform1i(u("u_proj"), cfg.proj);
+  gl.uniform1f(u("u_fovHalf"), cfg.lensFov * 0.5);
+  gl.uniform1f(u("u_radius"), cfg.radius);
   gl.uniform2f(u("u_look"), yaw, pitch);
   // Field of view is quoted for a 16:9 window. Hold the VERTICAL framing
   // steady and let width follow the window, capped -- otherwise a short wide
