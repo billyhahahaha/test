@@ -223,10 +223,15 @@ function diagnoseSource() {
       setSeg("seg-layout", "mono");
       state.layoutMode = "mono";
     }
-    setSeg("seg-proj", "fisheye");
-    state.projection = "fisheye";
-    $("grp-fisheye").hidden = false;
-    $("grp-equirect").hidden = true;
+    // A square eye is 180x180 either way, so dimensions cannot separate
+    // equirect from fisheye. Default to equirect: that is what delivery
+    // renders are (Resolve's VR 180 preset included), whereas fisheye is
+    // camera-original. Say so, rather than presenting a guess as a finding.
+    const proj = layered ? "fisheye" : "vr180";
+    setSeg("seg-proj", proj);
+    state.projection = proj;
+    $("grp-fisheye").hidden = proj !== "fisheye";
+    $("grp-equirect").hidden = proj !== "vr180";
     applyLayout();
   }
 
@@ -236,8 +241,9 @@ function diagnoseSource() {
       " frame is a single hemisphere. Set to <b>Mono + Fisheye</b>. Depth and alignment have " +
       "nothing to compare until you convert it to side-by-side &mdash; recipe in the panel notes."
     : "<b>Hemispherical source.</b><br>Each eye is square, so this is 180&deg; content, not a flat " +
-      "screen. Set to <b>Fisheye</b> &mdash; turn on <b>Preview</b> and drag to look around; straight " +
-      "edges in the world should come out straight.", 11000);
+      "screen. Set to <b>Equirect 180</b>, which is what delivery renders are. Turn on <b>Preview</b> " +
+      "and drag: if straight edges bow, it's camera-original fisheye instead &mdash; switch to " +
+      "<b>Fisheye</b> and set the circle.", 11000);
 }
 
 function setSeg(id, v) {
