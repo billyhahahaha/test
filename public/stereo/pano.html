@@ -123,7 +123,9 @@
   <span>Or point the page at one:<br><code>pano.html?src=clip.mp4</code></span>
 </div>
 
-<script type="module">
+<!-- Deliberately a classic script, not a module: it has no imports, and
+     modules are blocked over file:// so double-clicking the file would fail. -->
+<script>
 /* A panoramic video viewer. One eye of a stereo pair, reprojected from
    equirect to a rectilinear view you can steer with the mouse.
 
