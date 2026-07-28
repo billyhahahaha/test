@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Pano — drag to look around</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #000; overflow: hidden; }
+  body {
+    font: 400 13px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    color: #fff;
+  }
+
+  #view { position: fixed; inset: 0; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+  canvas:active { cursor: grabbing; }
+
+  /* Hint fades once you've understood it. */
+  .hint {
+    position: fixed;
+    left: 50%; bottom: 46px;
+    transform: translateX(-50%);
+    padding: 9px 16px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    letter-spacing: 0.01em;
+    pointer-events: none;
+    transition: opacity 0.6s ease;
+  }
+  .hint.gone { opacity: 0; }
+
+  .bar {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 30px 20px 16px;
+    background: linear-gradient(0deg, rgba(0,0,0,.62), transparent);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  body:hover .bar, .bar:focus-within { opacity: 1; }
+
+  button {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 34px; height: 34px;
+    border: 0; border-radius: 50%;
+    background: rgba(255, 255, 255, 0.14);
+    color: #fff;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  button:hover { background: rgba(255, 255, 255, 0.26); }
+  button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  svg { width: 15px; height: 15px; fill: currentColor; }
+
+  input[type=range] {
+    flex: 1;
+    height: 3px;
+    appearance: none;
+    background: rgba(255, 255, 255, 0.26);
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    appearance: none;
+    width: 11px; height: 11px;
+    border-radius: 50%;
+    background: #fff;
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 11px; height: 11px; border: 0; border-radius: 50%; background: #fff;
+  }
+
+  .msg {
+    position: fixed;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    max-width: 30rem;
+    padding: 22px 26px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.13);
+    line-height: 1.65;
+  }
+  .msg b { display: block; margin-bottom: 6px; font-size: 15px; }
+  .msg span { color: rgba(255, 255, 255, 0.62); }
+  .msg code {
+    font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #8fd0ff;
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div id="view"><canvas id="c"></canvas></div>
+
+<div class="hint" id="hint">Drag to look around · scroll to zoom</div>
+
+<div class="bar" id="bar" hidden>
+  <button id="play" aria-label="Play or pause">
+    <svg viewBox="0 0 24 24" id="icon"><path d="M8 5l11 7-11 7z"/></svg>
+  </button>
+  <input type="range" id="seek" min="0" max="1000" value="0" aria-label="Seek" />
+  <button id="full" aria-label="Fullscreen">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg>
+  </button>
+</div>
+
+<div class="msg" id="msg">
+  <b>Drop a 180° or 360° video here</b>
+  <span>Or point the page at one:<br><code>pano.html?src=clip.mp4</code></span>
+</div>
+
+<script type="module">
+/* A panoramic video viewer. One eye of a stereo pair, reprojected from
+   equirect to a rectilinear view you can steer with the mouse.
+
+   Configure via the query string:
+     ?src=clip.mp4      the video
+     &layout=sbs        sbs (default) | tb | mono  -- how eyes are packed
+     &eye=left          left (default) | right
+     &span=180          180 (default) | 360        -- horizontal coverage
+     &fov=86            starting field of view, degrees
+     &yaw=0             starting heading, degrees                            */
+
+const q = new URLSearchParams(location.search);
+const cfg = {
+  layout: (q.get("layout") || "sbs").toLowerCase(),
+  eye: (q.get("eye") || "left").toLowerCase() === "right" ? 1 : 0,
+  span: q.get("span") === "360" ? 2 : 1,
+  fov: (+q.get("fov") || 86) * Math.PI / 180,
+  yaw: (+q.get("yaw") || 0) * Math.PI / 180,
+};
+
+const canvas = document.getElementById("c");
+const msg = document.getElementById("msg");
+const bar = document.getElementById("bar");
+const hint = document.getElementById("hint");
+
+const gl = canvas.getContext("webgl2", { alpha: false, antialias: false, depth: false });
+if (!gl) fail("This browser has no WebGL2.", "It's needed to reproject the video.");
+
+const VERT = `#version 300 es
+out vec2 v_uv;
+void main() {
+  vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
+  gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+  v_uv = vec2(p.x, 1.0 - p.y);
+}`;
+
+const FRAG = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 o;
+
+uniform sampler2D u_src;
+uniform int   u_layout;      // 0 mono, 1 side-by-side, 2 over/under
+uniform int   u_eye;
+uniform float u_span;        // 1.0 = 180 degrees, 2.0 = 360
+uniform vec2  u_look;        // yaw, pitch
+uniform float u_fov;
+uniform float u_aspect;      // canvas width / height
+
+const float PI = 3.14159265359;
+
+void main() {
+  // Treat the canvas as a pinhole camera and cast a ray per pixel.
+  vec2 ndc = v_uv * 2.0 - 1.0;
+  float t = tan(u_fov * 0.5);
+  vec3 d = normalize(vec3(ndc.x * t, -ndc.y * t / u_aspect, -1.0));
+
+  float cp = cos(u_look.y), sp = sin(u_look.y);
+  d = vec3(d.x, d.y * cp - d.z * sp, d.y * sp + d.z * cp);
+  float cy = cos(u_look.x), sy = sin(u_look.x);
+  d = normalize(vec3(d.x * cy + d.z * sy, d.y, -d.x * sy + d.z * cy));
+
+  // Ray -> equirectangular texture coordinate.
+  float lon = atan(d.x, -d.z);
+  float lat = asin(clamp(d.y, -1.0, 1.0));
+  vec2 uv = vec2(lon / (u_span * PI) + 0.5, 0.5 - lat / PI);
+
+  // Outside the filmed hemisphere there is nothing to show.
+  if (uv.y < 0.0 || uv.y > 1.0 || (u_span < 1.5 && (uv.x < 0.0 || uv.x > 1.0))) {
+    o = vec4(0.0, 0.0, 0.0, 1.0);
+    return;
+  }
+  uv.x = fract(uv.x);
+
+  // Pick this eye out of the packed frame.
+  if (u_layout == 1) uv.x = uv.x * 0.5 + float(u_eye) * 0.5;
+  if (u_layout == 2) uv.y = uv.y * 0.5 + float(u_eye) * 0.5;
+  o = vec4(texture(u_src, uv).rgb, 1.0);
+}`;
+
+function compile(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+const prog = gl.createProgram();
+gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT));
+gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAG));
+gl.linkProgram(prog);
+if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+gl.useProgram(prog);
+const u = (n) => gl.getUniformLocation(prog, n);
+
+const tex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, tex);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+  new Uint8Array([0, 0, 0, 255]));
+
+/* ---------- view state ---------- */
+let yaw = cfg.yaw, pitch = 0, fov = cfg.fov;
+let velYaw = 0, velPitch = 0;
+let video = null;
+
+const LAYOUTS = { mono: 0, sbs: 1, tb: 2 };
+const clampPitch = (p) => Math.max(-1.25, Math.min(1.25, p));
+const setFov = (f) => { fov = Math.max(0.44, Math.min(2.0, f)); };   // ~25 to ~115 degrees
+
+/* ---------- input ---------- */
+const pointers = new Map();
+let drag = null, pinch = 0, moved = false;
+
+canvas.addEventListener("pointerdown", (e) => {
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  canvas.setPointerCapture(e.pointerId);
+  if (pointers.size === 1) {
+    drag = { x: e.clientX, y: e.clientY, yaw, pitch, dx: 0, dy: 0 };
+    velYaw = velPitch = 0;
+  } else if (pointers.size === 2) {
+    drag = null;
+    pinch = spread();
+  }
+});
+
+const up = (e) => {
+  pointers.delete(e.pointerId);
+  if (pointers.size < 2) pinch = 0;
+  if (pointers.size === 0 && drag) {
+    const k = fov / canvas.clientWidth;
+    velYaw = drag.dx * k;
+    velPitch = drag.dy * k;
+    drag = null;
+  }
+};
+canvas.addEventListener("pointerup", up);
+canvas.addEventListener("pointercancel", up);
+
+function spread() {
+  const p = [...pointers.values()];
+  return Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
+}
+
+canvas.addEventListener("pointermove", (e) => {
+  if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 2 && pinch > 0) {
+    const now = spread();
+    if (now > 0) setFov(fov * (pinch / now));
+    pinch = now;
+    return;
+  }
+  if (!drag) return;
+  const k = fov / canvas.clientWidth;
+  const nx = drag.yaw + (e.clientX - drag.x) * k;
+  const ny = clampPitch(drag.pitch + (e.clientY - drag.y) * k);
+  drag.dx = (nx - yaw) / k;
+  drag.dy = (ny - pitch) / k;
+  yaw = nx; pitch = ny;
+  if (!moved) { moved = true; hint.classList.add("gone"); }
+});
+
+canvas.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  setFov(fov * (1 + e.deltaY * 0.0015));
+}, { passive: false });
+
+canvas.addEventListener("dblclick", () => {
+  yaw = cfg.yaw; pitch = 0; velYaw = velPitch = 0; setFov(cfg.fov);
+});
+
+addEventListener("keydown", (e) => {
+  const step = fov * 0.12;
+  if (e.key === "ArrowLeft")  { yaw -= step; e.preventDefault(); }
+  if (e.key === "ArrowRight") { yaw += step; e.preventDefault(); }
+  if (e.key === "ArrowUp")    { pitch = clampPitch(pitch - step); e.preventDefault(); }
+  if (e.key === "ArrowDown")  { pitch = clampPitch(pitch + step); e.preventDefault(); }
+  if (e.key === " " && video) { e.preventDefault(); toggle(); }
+  if (e.key === "f") document.fullscreenElement ? document.exitFullscreen() : document.body.requestFullscreen();
+});
+
+/* ---------- sources ---------- */
+function load(src) {
+  const v = document.createElement("video");
+  v.src = src;
+  v.crossOrigin = "anonymous";
+  v.loop = true;
+  v.muted = true;          // required for autoplay
+  v.playsInline = true;
+  v.addEventListener("loadedmetadata", () => {
+    // A square eye means 180-degree content; 2:1 means a full sphere.
+    if (!q.get("layout") && v.videoWidth && v.videoHeight) {
+      const a = v.videoWidth / v.videoHeight;
+      if (a > 3.4) cfg.layout = "sbs";
+      else if (a < 0.7) cfg.layout = "tb";
+    }
+    msg.hidden = true;
+    bar.hidden = false;
+  });
+  v.addEventListener("error", () =>
+    fail("That video wouldn't play.", "Browsers need H.264 or H.265 in MP4. ProRes, APV and MV-HEVC won't decode here."));
+  v.play().catch(() => {});
+  video = v;
+}
+
+function fail(title, detail) {
+  msg.hidden = false;
+  msg.innerHTML = "<b></b><span></span>";
+  msg.querySelector("b").textContent = title;
+  msg.querySelector("span").textContent = detail;
+}
+
+addEventListener("dragover", (e) => e.preventDefault());
+addEventListener("drop", (e) => {
+  e.preventDefault();
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) load(URL.createObjectURL(f));
+});
+
+/* ---------- transport ---------- */
+const playBtn = document.getElementById("play");
+const icon = document.getElementById("icon");
+const seek = document.getElementById("seek");
+
+function toggle() {
+  if (!video) return;
+  video.paused ? video.play().catch(() => {}) : video.pause();
+}
+playBtn.addEventListener("click", toggle);
+canvas.addEventListener("click", () => { if (!moved) toggle(); moved = false; });
+seek.addEventListener("input", () => {
+  if (video && video.duration) video.currentTime = (seek.value / 1000) * video.duration;
+});
+document.getElementById("full").addEventListener("click", () =>
+  document.fullscreenElement ? document.exitFullscreen() : document.body.requestFullscreen());
+
+/* ---------- frame loop ---------- */
+function resize() {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = Math.max(1, Math.round(innerWidth * dpr));
+  const h = Math.max(1, Math.round(innerHeight * dpr));
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+}
+addEventListener("resize", resize);
+resize();
+
+function frame() {
+  requestAnimationFrame(frame);
+
+  if (!drag) {                       // let a flick glide to a stop
+    yaw += velYaw;
+    pitch = clampPitch(pitch + velPitch);
+    velYaw *= 0.94;
+    velPitch *= 0.94;
+  }
+
+  if (video && video.readyState >= 2) {
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
+    if (video.duration) seek.value = String(Math.round((video.currentTime / video.duration) * 1000));
+    icon.innerHTML = video.paused
+      ? '<path d="M8 5l11 7-11 7z"/>'
+      : '<path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/>';
+  }
+
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.uniform1i(u("u_src"), 0);
+  gl.uniform1i(u("u_layout"), LAYOUTS[cfg.layout] ?? 1);
+  gl.uniform1i(u("u_eye"), cfg.eye);
+  gl.uniform1f(u("u_span"), cfg.span);
+  gl.uniform2f(u("u_look"), yaw, pitch);
+  gl.uniform1f(u("u_fov"), fov);
+  gl.uniform1f(u("u_aspect"), canvas.width / canvas.height);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+requestAnimationFrame(frame);
+
+if (q.get("src")) load(q.get("src"));
+setTimeout(() => hint.classList.add("gone"), 6000);
+</script>
+</body>
+</html>
