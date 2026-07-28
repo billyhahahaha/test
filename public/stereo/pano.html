@@ -331,7 +331,12 @@ addEventListener("keydown", (e) => {
 
 /* ---------- sources ---------- */
 function load(src) {
+  if (video) video.remove();
   const v = document.createElement("video");
+  // Off-document video decodes unreliably in Safari, so keep it in the page
+  // but out of the way. This is the difference between frames and a black screen.
+  v.style.cssText = "position:fixed;left:-9999px;top:0;width:2px;height:2px;opacity:0;pointer-events:none";
+  document.body.appendChild(v);
   v.src = src;
   v.crossOrigin = "anonymous";
   v.loop = true;
@@ -344,13 +349,42 @@ function load(src) {
       if (a > 3.4) cfg.layout = "sbs";
       else if (a < 0.7) cfg.layout = "tb";
     }
+    lay.value = cfg.layout;
     msg.hidden = true;
     bar.hidden = false;
   });
-  v.addEventListener("error", () =>
-    fail("That video wouldn't play.", "Browsers need H.264 or H.265 in MP4. ProRes, APV and MV-HEVC won't decode here."));
-  v.play().catch(() => {});
+  // Say what actually loaded. A black frame with no explanation is the worst
+  // possible failure, and it is the one people hit first.
+  v.addEventListener("loadeddata", () => status(
+    v.videoWidth + "×" + v.videoHeight + " · " + cfg.layout +
+    " · " + (cfg.span === 2 ? "360" : "180") + "° · playing"));
+  v.addEventListener("stalled", () => status("stalled — waiting for data"));
+  v.addEventListener("error", () => {
+    const c = v.error && v.error.code;
+    fail(c === 4 ? "This browser can't decode that video."
+                 : "That video wouldn't play.",
+      c === 4 ? "It needs H.264 in an MP4. HEVC/H.265 is unreliable outside Safari, and ProRes, APV and MV-HEVC never decode in a browser."
+              : "The file may be incomplete or the path wrong.");
+  });
+  v.play().catch(() => status("autoplay blocked — press play"));
   video = v;
+}
+
+/** A one-line readout, so a black screen is never unexplained. */
+function status(text) {
+  let el = document.getElementById("stat");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "stat";
+    el.style.cssText = "position:fixed;top:12px;left:12px;padding:6px 10px;border-radius:8px;" +
+      "background:rgba(0,0,0,.55);font:11px ui-monospace,Menlo,monospace;color:#9ad0ff;" +
+      "pointer-events:none;transition:opacity .5s ease";
+    document.body.appendChild(el);
+  }
+  el.textContent = text;
+  el.style.opacity = "1";
+  clearTimeout(status._t);
+  status._t = setTimeout(() => { el.style.opacity = "0"; }, 4000);
 }
 
 function fail(title, detail) {
@@ -411,6 +445,10 @@ function frame() {
     velPitch *= 0.94;
   }
 
+  if (video && video.readyState < 2 && video.error === null && !frame._warned && performance.now() > 8000) {
+    frame._warned = true;
+    status("decoded no frames \u2014 codec likely unsupported in this browser");
+  }
   if (video && video.readyState >= 2) {
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
