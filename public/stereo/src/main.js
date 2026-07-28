@@ -33,6 +33,7 @@ const state = {
   plateAspect: 16 / 9,
   preview: false,
   lookYaw: 0, lookPitch: 0,
+  velYaw: 0, velPitch: 0,
   previewFov: 90 * Math.PI / 180,
   layout: "sbs",
   projection: "flat",
@@ -273,6 +274,7 @@ function loop(now) {
   pushTexture();
 
   state.wigglePhase = Math.floor(now / 145) % 2;
+  applyMomentum();
 
   const wantDepth = state.hud || needsDisparity(state.mode);
   if (wantDepth && now - tDisp > 90) {
@@ -503,6 +505,7 @@ function wireUI() {
     state.eyeAspect = displayEyeAspect(state);
     $("grp-fisheye").hidden = v !== "fisheye";
     $("grp-equirect").hidden = v !== "vr180" && v !== "vr360";
+    els.stage.classList.toggle("looking", state.preview && v !== "flat");
     if (v !== "flat" && !state.preview) showMsg(
       "Turn on <b>Preview</b> to check this projection without a headset — drag to look around.", 4500);
     updateBadges();
@@ -510,6 +513,7 @@ function wireUI() {
 
   toggle($("btn-preview"), false, (on) => {
     state.preview = on;
+    els.stage.classList.toggle("looking", on && state.projection !== "flat");
     if (on) { state.lookYaw = 0; state.lookPitch = 0; }
     updateBadges();
   });
@@ -518,6 +522,7 @@ function wireUI() {
   slider("s-rad", "v-rad", (v) => { state.radius = v / 1000; }, (v) => (v / 1000).toFixed(3));
   slider("s-cx", "v-cx", (v) => { state.circleX = v / 1000; }, (v) => (v / 1000).toFixed(3));
   slider("s-cy", "v-cy", (v) => { state.circleY = v / 1000; }, (v) => (v / 1000).toFixed(3));
+  slider("s-pfov", "v-pfov", (v) => { state.previewFov = v * Math.PI / 180; }, (v) => v + "\u00b0");
   slider("s-eqv", "v-eqv", (v) => { state.eqVert = (v / 2) * Math.PI / 180; }, (v) => v + "°");
   slider("s-yaw", "v-yaw", (v) => { state.yaw = v * Math.PI / 180; }, (v) => v + "°");
   $("sel-aspect").addEventListener("change", (e) => {
@@ -580,22 +585,80 @@ function wireUI() {
   });
 
   /* input */
+  /* Look controls. Drag to pan, wheel or pinch to zoom, double-click to
+     recentre. Momentum carries a flick, because panning a 180-degree plate
+     one drag-width at a time feels like work. */
+  const pointers = new Map();
   let drag = null;
+  let pinch = 0;
+
+  const looking = () => state.preview && state.projection !== "flat";
+
   els.stage.addEventListener("pointerdown", (e) => {
-    if (!state.preview || state.projection === "flat") return;
-    drag = { x: e.clientX, y: e.clientY, yaw: state.lookYaw, pitch: state.lookPitch };
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (!looking()) return;
     els.stage.setPointerCapture(e.pointerId);
+    if (pointers.size === 1) {
+      drag = { x: e.clientX, y: e.clientY, yaw: state.lookYaw, pitch: state.lookPitch, t: 0, dx: 0, dy: 0 };
+      state.velYaw = state.velPitch = 0;
+    } else if (pointers.size === 2) {
+      drag = null;
+      pinch = spread();
+    }
   });
-  els.stage.addEventListener("pointerup", () => { drag = null; });
-  els.stage.addEventListener("pointermove", (e) => {
-    if (drag) {
+
+  const release = (e) => {
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) pinch = 0;
+    if (pointers.size === 0 && drag) {
+      // Hand the last frame's motion over as momentum.
       const k = state.previewFov / els.stage.clientWidth;
-      state.lookYaw = drag.yaw + (e.clientX - drag.x) * k;
-      state.lookPitch = Math.max(-1.5, Math.min(1.5, drag.pitch + (e.clientY - drag.y) * k));
+      state.velYaw = drag.dx * k;
+      state.velPitch = drag.dy * k;
+      drag = null;
+    }
+  };
+  els.stage.addEventListener("pointerup", release);
+  els.stage.addEventListener("pointercancel", release);
+
+  function spread() {
+    const p = [...pointers.values()];
+    return Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
+  }
+
+  els.stage.addEventListener("pointermove", (e) => {
+    if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (pointers.size === 2 && pinch > 0) {
+      const now = spread();
+      if (now > 0) zoom(state.previewFov * (pinch / now));
+      pinch = now;
       return;
     }
+
+    if (drag) {
+      const k = state.previewFov / els.stage.clientWidth;
+      drag.dx = e.clientX - drag.x - (state.lookYaw - drag.yaw) / k;
+      drag.dy = e.clientY - drag.y - (state.lookPitch - drag.pitch) / k;
+      state.lookYaw = drag.yaw + (e.clientX - drag.x) * k;
+      state.lookPitch = clampPitch(drag.pitch + (e.clientY - drag.y) * k);
+      return;
+    }
+
     const r = els.stage.getBoundingClientRect();
     setParallax(((e.clientX - r.left) / r.width) * 2 - 1, ((e.clientY - r.top) / r.height) * 2 - 1);
+  });
+
+  els.stage.addEventListener("wheel", (e) => {
+    if (!looking()) return;
+    e.preventDefault();
+    zoom(state.previewFov * (1 + e.deltaY * 0.0015));
+  }, { passive: false });
+
+  els.stage.addEventListener("dblclick", () => {
+    if (!looking()) return;
+    state.lookYaw = state.lookPitch = state.velYaw = state.velPitch = 0;
+    zoom(90 * Math.PI / 180);
   });
   els.stage.addEventListener("pointerleave", () => setParallax(0, 0));
 
@@ -609,6 +672,25 @@ function wireUI() {
   });
 
   window.addEventListener("keydown", onKey);
+}
+
+const clampPitch = (p) => Math.max(-1.2, Math.min(1.2, p));
+
+/** Keep the virtual lens between a tight long-lens crop and a wide view.
+    Past ~110 degrees rectilinear stretch at the frame edge takes over. */
+function zoom(fov) {
+  state.previewFov = Math.max(25 * Math.PI / 180, Math.min(110 * Math.PI / 180, fov));
+  $("v-pfov").textContent = Math.round(state.previewFov * 180 / Math.PI) + "\u00b0";
+  $("s-pfov").value = String(Math.round(state.previewFov * 180 / Math.PI));
+}
+
+/** Glide to a stop rather than halting the instant a finger lifts. */
+function applyMomentum() {
+  if (Math.abs(state.velYaw) < 1e-5 && Math.abs(state.velPitch) < 1e-5) return;
+  state.lookYaw += state.velYaw;
+  state.lookPitch = clampPitch(state.lookPitch + state.velPitch);
+  state.velYaw *= 0.94;
+  state.velPitch *= 0.94;
 }
 
 function setParallax(nx, ny) {

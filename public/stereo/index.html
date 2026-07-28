@@ -107,7 +107,11 @@
           <button data-v="vr360">Equirect 360</button>
           <button data-v="fisheye">Fisheye</button>
         </div>
-        <p class="meta" id="proj-meta">Flat screen in space. Switch to Preview to look around a spherical or fisheye source on this screen — same maths the headset runs, so what you fix here is fixed there.</p>
+        <label class="slider" id="row-pfov">
+          <span>Field of view<b id="v-pfov">90&deg;</b></span>
+          <input type="range" id="s-pfov" min="25" max="110" value="90" step="1" />
+        </label>
+        <p class="meta" id="proj-meta">Flat screen in space. Switch to Preview to look around a spherical or fisheye source on this screen — same maths the headset runs, so what you fix here is fixed there. Drag to pan, wheel or pinch to zoom, double-click to recentre.</p>
 
         <div id="grp-fisheye" hidden>
           <select id="sel-lens" class="sel" aria-label="Lens model" style="width:100%;margin-bottom:9px">
