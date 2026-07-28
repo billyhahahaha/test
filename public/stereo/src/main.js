@@ -7,6 +7,7 @@ import { createTestCard } from "./testcard.js";
 import { createXR, xrSupported } from "./xr.js";
 import {
   MODE, MODE_LIST, guessLayout, displayEyeAspect, nativeEyeAspect, needsDisparity,
+  isLayeredStereo, looksHemispherical,
 } from "./formats.js";
 
 const $ = (id) => document.getElementById(id);
@@ -165,6 +166,7 @@ function useMedia(url, name, isObjectUrl) {
       source.width = v.videoWidth;
       source.height = v.videoHeight;
       applyLayout();
+      diagnoseSource();
       updateBadges();
     });
     v.addEventListener("error", () => {
@@ -201,6 +203,44 @@ function pushTexture() {
     disposeSource();
     useTestCard();
   }
+}
+
+/**
+ * Say what actually decoded, rather than letting a guess stand.
+ * MV-HEVC containers (.aivu / spatial .mov) keep the second eye in a codec
+ * layer the browser never exposes, so one eye arrives and any packed-stereo
+ * guess would be matching an image against itself.
+ */
+function diagnoseSource() {
+  if (!source) return;
+  const layered = isLayeredStereo(source.name || "");
+  const hemi = looksHemispherical(state.layout, state.srcW, state.srcH);
+  if (!layered && !hemi) return;
+
+  if (hemi) {
+    if (layered) {                       // second eye is in a codec layer: mono is the truth
+      setSeg("seg-layout", "mono");
+      state.layoutMode = "mono";
+    }
+    setSeg("seg-proj", "fisheye");
+    state.projection = "fisheye";
+    $("grp-fisheye").hidden = false;
+    $("grp-equirect").hidden = true;
+    applyLayout();
+  }
+
+  showMsg(layered
+    ? "<b>One eye decoded, not two.</b><br>Apple Immersive / MV-HEVC keeps the second eye in a " +
+      "codec layer no browser exposes, so this " + state.srcW + "&times;" + state.srcH +
+      " frame is a single hemisphere. Set to <b>Mono + Fisheye</b>. Depth and alignment have " +
+      "nothing to compare until you convert it to side-by-side &mdash; recipe in the panel notes."
+    : "<b>Hemispherical source.</b><br>Each eye is square, so this is 180&deg; content, not a flat " +
+      "screen. Set to <b>Fisheye</b> &mdash; turn on <b>Preview</b> and drag to look around; straight " +
+      "edges in the world should come out straight.", 11000);
+}
+
+function setSeg(id, v) {
+  $(id).querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.v === v));
 }
 
 /* ------------------------------------------------------------------ */
@@ -274,6 +314,14 @@ const grade = (v, ok, warn) => (v <= ok ? "ok" : v <= warn ? "warn" : "bad");
 const ALIGN_CONFIDENCE = 0.2;
 
 function renderReadout() {
+  if (state.layout === "mono") {
+    els.readout.innerHTML =
+      '<div class="ro"><span>stereo analysis</span><b class="warn">no second eye</b></div>' +
+      '<div class="ro-note">Only one eye is present, so depth budget and alignment have ' +
+      'nothing to compare. Convert to side-by-side to get real measurements.</div>';
+    ["hudBudget", "hudNearfar", "hudVert", "hudRoll"].forEach((k) => set(els[k], "\u2014", ""));
+    return;
+  }
   const b = stats.budget;
   const a = stats.align;
   const rows = [];

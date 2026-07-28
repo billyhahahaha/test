@@ -39,6 +39,13 @@ const SINGLE_PANEL = new Set([
   MODE.DIFF, MODE.DEPTH, MODE.PARALLAX, MODE.INTERLEAVED,
 ]);
 
+/** True where the container hides its second eye in a codec layer rather than
+    packing it into the frame — MV-HEVC and everything built on it. A browser
+    decodes only the base layer, so what arrives is ONE eye. */
+export function isLayeredStereo(name = "") {
+  return /\.(aivu|mov|heic|heif)$/i.test(name.trim());
+}
+
 /** Guess the packing from dimensions plus whatever the filename admits to. */
 export function guessLayout(w, h, name = "") {
   const n = name.toLowerCase();
@@ -47,9 +54,26 @@ export function guessLayout(w, h, name = "") {
   if (/(^|[^a-z])(sbs|lr|side.?by.?side|half.?sbs|full.?sbs|_3dh)([^a-z]|$)/.test(n)) return "sbs";
   if (!w || !h) return "mono";
   const a = w / h;
-  if (a >= 3.0) return "sbs";   // 3840x1080 and friends
-  if (a <= 1.05) return "tb";   // 1920x2160 and friends
+  if (a >= 3.0) return "sbs";    // 3840x1080 and friends
+  // 2:1 whose halves are each square is the VR180 signature — dual-fisheye
+  // circles or a pair of 180-degree hemispheres. Plain 2:1 mono exists, but on
+  // a stereo bench it's the rarer read, and Left/Right exposes a wrong guess
+  // in one click.
+  if (a > 1.9 && a < 2.1) return "sbs";
+  // Over/under of 16:9 lands at 0.89, so the TB window stops short of square.
+  // A SQUARE frame is far more likely one 180-degree eye — which is what a
+  // browser gets from MV-HEVC, since it only ever decodes the base layer.
+  // Guessing TB there silently matches an image against its own other half
+  // and reports confident nonsense.
+  if (a <= 0.95) return "tb";
   return "mono";
+}
+
+/** A square-ish EYE is a 180-degree hemisphere, not a 16:9 screen. */
+export function looksHemispherical(layout, w, h) {
+  if (!w || !h) return false;
+  const a = nativeEyeAspect(layout, w, h);
+  return a > 0.9 && a < 1.15;
 }
 
 /** Aspect of a single eye as stored in the file (before any un-squeeze). */
